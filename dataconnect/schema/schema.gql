@@ -1,0 +1,45 @@
+type User @table {
+  displayName: String!
+  userType: String!
+  createdAt: Timestamp!
+  email: String
+  phoneNumber: String
+  photoUrl: String
+  bio: String
+}
+
+type Lesson @table {
+  startTime: Timestamp!
+  endTime: Timestamp!
+  status: String!
+  createdAt: Timestamp!
+  notes: String
+  instructorFeedback: String
+  student: User
+  instructor: User
+}
+
+type PracticeLog @table {
+  practiceDate: Date!
+  durationMinutes: Int!
+  createdAt: Timestamp!
+  notes: String
+  routeDescription: String
+  student: User
+}
+
+type LearningMaterial @table {
+  title: String!
+  materialType: String!
+  createdAt: Timestamp!
+  content: String
+  url: String
+  category: String
+}
+
+type Enrollment @table(key: ["student", "instructor"]) {
+  createdAt: Timestamp!
+  status: String
+  student: User!
+  instructor: User!
+}

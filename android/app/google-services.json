@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "859418833036",
+    "project_id": "driveapp-17f24",
+    "storage_bucket": "driveapp-17f24.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:859418833036:android:36dd5703413f2c98af4ba9",
+        "android_client_info": {
+          "package_name": "com.example.driveapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDO9vEXXOHOe4F3PS9-uKq3r-w7OSFFCGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

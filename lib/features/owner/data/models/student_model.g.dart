@@ -1,0 +1,76 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'student_model.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+StudentModel _$StudentModelFromJson(Map<String, dynamic> json) => StudentModel(
+  id: json['id'] as String,
+  userId: json['user_id'] as String,
+  schoolId: json['school_id'] as String,
+  fullName: json['full_name'] as String,
+  fatherName: json['father_name'] as String?,
+  dob: json['dob'] as String?,
+  gender: json['gender'] as String?,
+  phone: json['phone'] as String,
+  alternatePhone: json['alternate_phone'] as String?,
+  email: json['email'] as String?,
+  address: json['address'] as String?,
+  city: json['city'] as String?,
+  pincode: json['pincode'] as String?,
+  idProofType: json['id_proof_type'] as String?,
+  idProofNumber: json['id_proof_number'] as String?,
+  courseType: json['course_type'] as String,
+  licenseType: json['license_type'] as String?,
+  batchTiming: json['batch_timing'] as String?,
+  trainingStartDate: json['training_start_date'] as String?,
+  trainingEndDate: json['training_end_date'] as String?,
+  totalDurationDays: (json['total_duration_days'] as num?)?.toInt(),
+  feesAmount: (json['fees_amount'] as num).toDouble(),
+  paymentMode: json['payment_mode'] as String?,
+  paymentStatus: json['payment_status'] as String,
+  emergencyContactName: json['emergency_contact_name'] as String?,
+  emergencyContactPhone: json['emergency_contact_phone'] as String?,
+  assignedInstructorId: json['assigned_instructor_id'] as String?,
+  vehicleType: json['vehicle_type'] as String?,
+  vehicleNumber: json['vehicle_number'] as String?,
+  remarks: json['remarks'] as String?,
+  createdAt: json['created_at'] as String?,
+);
+
+Map<String, dynamic> _$StudentModelToJson(StudentModel instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'user_id': instance.userId,
+      'school_id': instance.schoolId,
+      'full_name': instance.fullName,
+      'father_name': instance.fatherName,
+      'dob': instance.dob,
+      'gender': instance.gender,
+      'phone': instance.phone,
+      'alternate_phone': instance.alternatePhone,
+      'email': instance.email,
+      'address': instance.address,
+      'city': instance.city,
+      'pincode': instance.pincode,
+      'id_proof_type': instance.idProofType,
+      'id_proof_number': instance.idProofNumber,
+      'course_type': instance.courseType,
+      'license_type': instance.licenseType,
+      'batch_timing': instance.batchTiming,
+      'training_start_date': instance.trainingStartDate,
+      'training_end_date': instance.trainingEndDate,
+      'total_duration_days': instance.totalDurationDays,
+      'fees_amount': instance.feesAmount,
+      'payment_mode': instance.paymentMode,
+      'payment_status': instance.paymentStatus,
+      'emergency_contact_name': instance.emergencyContactName,
+      'emergency_contact_phone': instance.emergencyContactPhone,
+      'assigned_instructor_id': instance.assignedInstructorId,
+      'vehicle_type': instance.vehicleType,
+      'vehicle_number': instance.vehicleNumber,
+      'remarks': instance.remarks,
+      'created_at': instance.createdAt,
+    };

@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Users: self-access only
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Schools: owner-only (ownerId == schoolId == auth.uid)
+    match /schools/{schoolId} {
+      allow create: if isSignedIn()
+        && request.auth.uid == schoolId
+        && request.resource.data.owner_id == request.auth.uid;
+
+      allow read, update, delete: if isSignedIn()
+        && resource.data.owner_id == request.auth.uid;
+
+      // Students under a school (if using subcollections)
+      match /students/{studentId} {
+        allow read, write: if isSignedIn()
+          && resource.data.school_id == schoolId
+          && request.auth.uid == schoolId;
+      }
+    }
+
+    // Top-level students collection (current structure)
+    match /students/{studentId} {
+      allow create: if isSignedIn()
+        && request.resource.data.owner_id == request.auth.uid
+        && request.resource.data.school_id == request.auth.uid;
+
+      allow read, update, delete: if isSignedIn()
+        && resource.data.owner_id == request.auth.uid
+        && resource.data.school_id == request.auth.uid;
+    }
+  }
+}
