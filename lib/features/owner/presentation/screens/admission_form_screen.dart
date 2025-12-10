@@ -18,6 +18,8 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen> {
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  final _studentPasswordController = TextEditingController();
+  final _confirmStudentPasswordController = TextEditingController();
   final _fatherNameController = TextEditingController();
   final _addressController = TextEditingController();
   final _feesAmountController = TextEditingController();
@@ -36,6 +38,8 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen> {
     _fullNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _studentPasswordController.dispose();
+    _confirmStudentPasswordController.dispose();
     _fatherNameController.dispose();
     _addressController.dispose();
     _feesAmountController.dispose();
@@ -83,14 +87,49 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen> {
             TextFormField(
               controller: _emailController,
               decoration: const InputDecoration(
-                labelText: 'Email (Optional)',
+                labelText: 'Student Email *',
                 prefixIcon: Icon(Icons.email),
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
-                if (value != null && value.isNotEmpty) {
-                  return Validators.validateEmail(value);
+                if (value == null || value.isEmpty) {
+                  return 'Email is required';
+                }
+                return Validators.validateEmail(value);
+              },
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _studentPasswordController,
+              decoration: const InputDecoration(
+                labelText: 'Student Password *',
+                prefixIcon: Icon(Icons.lock),
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Password is required';
+                }
+                if (value.length < 6) return 'Min 6 characters';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _confirmStudentPasswordController,
+              decoration: const InputDecoration(
+                labelText: 'Confirm Student Password *',
+                prefixIcon: Icon(Icons.lock_outline),
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              validator: (value) {
+                if (value != _studentPasswordController.text) {
+                  return 'Passwords do not match';
                 }
                 return null;
               },
@@ -364,13 +403,13 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen> {
           .doc();
 
       await studentDoc.set({
-        'user_id': '', // Will be set when student creates account
+        'user_id': '', // Will be set when student first logs in
         'school_id': user.uid,
         'full_name': _fullNameController.text.trim(),
         'phone': _phoneController.text.trim(),
-        'email': _emailController.text.trim().isEmpty
-            ? null
-            : _emailController.text.trim(),
+        'email': _emailController.text.trim(),
+        'login_email': _emailController.text.trim(),
+        'login_password': _studentPasswordController.text,
         'father_name': _fatherNameController.text.trim().isEmpty
             ? null
             : _fatherNameController.text.trim(),

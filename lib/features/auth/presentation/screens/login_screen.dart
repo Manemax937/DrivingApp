@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/services/biometric_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/custom_button.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../providers/firebase_auth_provider.dart';
 import 'owner_registration_screen.dart';
+
+enum LoginRole { student, owner }
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -21,8 +24,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _schoolNameController = TextEditingController();
   bool _obscurePassword = true;
   bool _admissionDialogShown = false;
+  bool _localLoading = false;
+  LoginRole _loginRole = LoginRole.student;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -52,6 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _schoolNameController.dispose();
     _animationController.dispose();
     super.dispose();
   }
@@ -203,6 +210,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SegmentedButton<LoginRole>(
+              segments: const [
+                ButtonSegment<LoginRole>(
+                  value: LoginRole.student,
+                  label: Text('Student'),
+                  icon: Icon(Icons.school_outlined),
+                ),
+                ButtonSegment<LoginRole>(
+                  value: LoginRole.owner,
+                  label: Text('Owner'),
+                  icon: Icon(Icons.business),
+                ),
+              ],
+              selected: {_loginRole},
+              onSelectionChanged: (value) {
+                setState(() => _loginRole = value.first);
+              },
+            ),
+            const SizedBox(height: 16),
             const Text(
               'Welcome Back',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -215,6 +241,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
+
+            // School Name Field (only for students)
+            if (_loginRole == LoginRole.student) ...[
+              TextFormField(
+                controller: _schoolNameController,
+                decoration: InputDecoration(
+                  labelText: 'School Name *',
+                  prefixIcon: const Icon(Icons.school_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  hintText: 'Enter your school name',
+                ),
+                textCapitalization: TextCapitalization.words,
+                validator: (value) {
+                  if (_loginRole == LoginRole.student) {
+                    if (value == null || value.isEmpty) {
+                      return 'School name is required';
+                    }
+                  }
+                  return null;
+                },
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Email Field
             TextFormField(
@@ -292,7 +344,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             CustomButton(
               text: 'Sign In',
               onPressed: _handleLogin,
-              isLoading: authState.isLoading,
+              isLoading: authState.isLoading || _localLoading,
               icon: Icons.login,
               height: 56,
             ),
@@ -352,31 +404,136 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    // Check if this is an owner login
-    final isOwnerLogin = await _checkIfOwnerEmail(email);
-
-    if (isOwnerLogin) {
-      // Use owner login (with biometric)
-      await ref.read(authProvider.notifier).loginOwner(email, password);
-    } else {
-      // Use regular login
+    if (_loginRole == LoginRole.owner) {
       await ref.read(authProvider.notifier).login(email, password);
+      return;
+    }
+
+    await _loginStudentWithAdmission(email, password);
+  }
+
+  Future<void> _loginStudentWithAdmission(String email, String password) async {
+    setState(() => _localLoading = true);
+    try {
+      final schoolName = _schoolNameController.text.trim();
+
+      // First, find the school by name to get school_id
+      String? schoolId;
+      if (schoolName.isNotEmpty) {
+        final schoolQuery = await FirebaseFirestore.instance
+            .collection('schools')
+            .where('name', isEqualTo: schoolName)
+            .limit(1)
+            .get();
+
+        if (schoolQuery.docs.isEmpty) {
+          _showSnack('School not found. Please check the school name.');
+          return;
+        }
+
+        schoolId = schoolQuery.docs.first.id;
+      }
+
+      // Search for student admission by email (and school_id if available)
+      Query query = FirebaseFirestore.instance
+          .collection('students')
+          .where('login_email', isEqualTo: email);
+
+      if (schoolId != null) {
+        query = query.where('school_id', isEqualTo: schoolId);
+      }
+
+      final admissionSnap = await query.limit(1).get();
+
+      if (admissionSnap.docs.isEmpty) {
+        _showSnack(
+          'No admission found for this email and school. Contact the owner.',
+        );
+        return;
+      }
+
+      final admissionDoc = admissionSnap.docs.first;
+      final data = admissionDoc.data() as Map<String, dynamic>?;
+      if (data == null) {
+        _showSnack('Invalid admission data. Contact the owner.');
+        return;
+      }
+
+      final storedPassword = (data['login_password'] ?? '') as String;
+
+      if (storedPassword != password) {
+        _showSnack('Incorrect password. Contact the owner.');
+        return;
+      }
+
+      final existingUserId = (data['user_id'] ?? '').toString();
+
+      if (existingUserId.isNotEmpty) {
+        await ref.read(authProvider.notifier).login(email, password);
+        return;
+      }
+
+      // Use schoolId from query if available, otherwise get from admission data
+      final admissionSchoolId =
+          schoolId ?? (data['school_id'] ?? '') as String? ?? '';
+
+      // Create Firebase Auth user for the student
+      UserCredential cred;
+      try {
+        cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use') {
+          await ref.read(authProvider.notifier).login(email, password);
+          return;
+        }
+        rethrow;
+      }
+
+      final uid = cred.user!.uid;
+      final fullName = (data['full_name'] ?? '') as String;
+      await cred.user?.updateDisplayName(fullName);
+
+      final phone = (data['phone'] ?? '') as String? ?? '';
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'email': email,
+        'full_name': fullName,
+        'phone': phone,
+        'role': 'student',
+        'school_id': admissionSchoolId,
+        'first_login': true,
+        'active': true,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      await admissionDoc.reference.update({
+        'user_id': uid,
+        'email': email,
+        'login_email': email,
+        'login_password': password,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      // Reload auth state to trigger navigation
+      await ref.read(authProvider.notifier).login(email, password);
+    } on FirebaseAuthException catch (e) {
+      _showSnack(e.message ?? 'Authentication failed');
+    } catch (e) {
+      _showSnack('Login failed: $e');
+    } finally {
+      if (mounted) setState(() => _localLoading = false);
     }
   }
 
-  // Add this helper method
-  Future<bool> _checkIfOwnerEmail(String email) async {
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection('owners')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      return query.docs.isNotEmpty;
-    } catch (e) {
-      return false;
-    }
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _navigateToRoleBasedHome(String? role) {

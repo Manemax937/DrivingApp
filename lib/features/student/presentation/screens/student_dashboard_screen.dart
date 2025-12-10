@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../auth/presentation/providers/firebase_auth_provider.dart';
 import '../providers/student_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -64,6 +65,10 @@ class _StudentDashboardScreenState
               _buildWelcomeCard(),
               const SizedBox(height: 20),
 
+              // School Name Card
+              _buildSchoolNameCard(),
+              const SizedBox(height: 20),
+
               // Quick Actions
               _buildQuickActionsSection(),
               const SizedBox(height: 20),
@@ -123,6 +128,165 @@ class _StudentDashboardScreenState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSchoolNameCard() {
+    final schoolInfo = ref.watch(studentSchoolProvider);
+
+    return schoolInfo.when(
+      data: (info) {
+        if (info == null) {
+          // Show a fallback card if school info not found
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.school, color: Colors.orange[700], size: 32),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'School',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'School information not available',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.orange[900],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.school, color: Colors.blue[700], size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'School',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      info.name,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[900],
+                      ),
+                    ),
+                    if (info.address != null && info.address!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        info.address!,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Loading school info...',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+      error: (error, stack) {
+        // Show error state instead of hiding
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.red[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red[200]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red[700], size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'School',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Unable to load school information',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red[900],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -437,4 +601,65 @@ class _StudentDashboardScreenState
       context.go('/login');
     }
   }
+}
+
+/// Provider to fetch student's school info
+final studentSchoolProvider = FutureProvider.autoDispose<SchoolInfo?>((
+  ref,
+) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return null;
+
+  try {
+    // Get user document to find school_id
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!userDoc.exists) return null;
+
+    var schoolId = userDoc.data()?['school_id'] as String?;
+
+    // If school_id not in user doc, try to get it from admission document
+    if (schoolId == null || schoolId.isEmpty) {
+      final admissionQuery = await FirebaseFirestore.instance
+          .collection('students')
+          .where('user_id', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (admissionQuery.docs.isNotEmpty) {
+        schoolId = admissionQuery.docs.first.data()['school_id'] as String?;
+      }
+    }
+
+    if (schoolId == null || schoolId.isEmpty) return null;
+
+    // Get school document
+    final schoolDoc = await FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .get();
+
+    if (!schoolDoc.exists) return null;
+
+    final data = schoolDoc.data()!;
+    return SchoolInfo(
+      id: schoolDoc.id,
+      name: data['name'] as String? ?? 'Your School',
+      address: data['address'] as String?,
+    );
+  } catch (e) {
+    debugPrint('Error fetching school info: $e');
+    return null;
+  }
+});
+
+class SchoolInfo {
+  final String id;
+  final String name;
+  final String? address;
+
+  SchoolInfo({required this.id, required this.name, this.address});
 }

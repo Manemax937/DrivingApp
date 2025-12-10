@@ -109,8 +109,21 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
                               ),
                             ],
                           ),
-                          trailing: _buildPaymentStatusChip(
-                            student.paymentStatus,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildPaymentStatusChip(student.paymentStatus),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () =>
+                                    _deleteStudent(context, student),
+                                tooltip: 'Remove Student',
+                              ),
+                            ],
                           ),
                           isThreeLine: true,
                         ),
@@ -335,6 +348,74 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteStudent(BuildContext context, Student student) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Student'),
+        content: Text(
+          'Are you sure you want to remove ${student.fullName}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    try {
+      // Delete student document from Firestore
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(student.id)
+          .delete();
+
+      // Optionally, also delete the user account if exists
+      if (student.userId.isNotEmpty) {
+        try {
+          // Delete user document
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(student.userId)
+              .delete();
+        } catch (e) {
+          // User might not exist, ignore error
+          debugPrint('Error deleting user: $e');
+        }
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${student.fullName} has been removed successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing student: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleLogout(BuildContext context) async {
