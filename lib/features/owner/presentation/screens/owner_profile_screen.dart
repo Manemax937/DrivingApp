@@ -7,16 +7,17 @@ import '../../../auth/presentation/providers/firebase_auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/firebase_service.dart';
 
-class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+class OwnerProfileScreen extends ConsumerStatefulWidget {
+  const OwnerProfileScreen({super.key});
 
   @override
-  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<OwnerProfileScreen> createState() => _OwnerProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen>
+class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen>
     with TickerProviderStateMixin {
   Map<String, dynamic>? _userData;
+  Map<String, dynamic>? _schoolData;
   bool _isLoading = true;
 
   // Animation Controllers
@@ -92,18 +93,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final doc = await FirebaseFirestore.instance
+      // Load user data
+      final userDoc = await FirebaseFirestore.instance
           .collection(FirebaseService.usersCollection)
           .doc(user.uid)
           .get();
 
-      if (doc.exists) {
+      if (userDoc.exists) {
         setState(() {
-          _userData = doc.data();
+          _userData = userDoc.data();
         });
-        // Animate avatar after data loads
-        _avatarController!.forward();
       }
+
+      // Load school data
+      final schoolId = _userData?['school_id'] ?? user.uid;
+      final schoolDoc = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .get();
+
+      if (schoolDoc.exists) {
+        setState(() {
+          _schoolData = schoolDoc.data();
+        });
+      }
+
+      // Animate avatar after data loads
+      _avatarController!.forward();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -237,10 +253,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                     ),
                                     _buildInfoRow(
                                       'Role',
-                                      _userData?['role']?.toUpperCase() ??
-                                          'N/A',
+                                      (_userData?['role'] ?? 'owner')
+                                          .toUpperCase(),
                                       Icons.badge,
                                       [Color(0xFFAB47BC), Color(0xFFBA68C8)],
+                                    ),
+                                  ]),
+                                  const SizedBox(height: 16),
+                                  _buildInfoCard('School Information', [
+                                    _buildInfoRow(
+                                      'School Name',
+                                      _schoolData?['name'] ?? 'N/A',
+                                      Icons.school,
+                                      [Color(0xFF42A5F5), Color(0xFF64B5F6)],
+                                    ),
+                                    _buildInfoRow(
+                                      'Address',
+                                      _schoolData?['address'] ?? 'N/A',
+                                      Icons.location_on,
+                                      [Color(0xFF66BB6A), Color(0xFF81C784)],
                                     ),
                                   ]),
                                   const SizedBox(height: 16),
@@ -274,7 +305,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => context.go('/student/dashboard'),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ),
               SizedBox(width: 16),
@@ -353,7 +384,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   radius: 60,
                   backgroundColor: Colors.white,
                   child: Text(
-                    (_userData?['full_name'] ?? 'U')[0].toUpperCase(),
+                    (_userData?['full_name'] ?? 'O')[0].toUpperCase(),
                     style: TextStyle(
                       fontSize: 48,
                       fontWeight: FontWeight.bold,
@@ -368,7 +399,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             ),
             const SizedBox(height: 20),
             Text(
-              _userData?['full_name'] ?? 'User',
+              _userData?['full_name'] ?? 'Owner',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -529,7 +560,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             Icons.edit,
             [Color(0xFF42A5F5), Color(0xFF64B5F6)],
             () {
-              // Navigate to edit profile
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Row(
@@ -554,7 +584,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             Icons.lock_outline,
             [Color(0xFF66BB6A), Color(0xFF81C784)],
             () {
-              // Navigate to change password
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Row(

@@ -16,22 +16,67 @@ class AttendanceCalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _AttendanceCalendarScreenState
-    extends ConsumerState<AttendanceCalendarScreen> {
+    extends ConsumerState<AttendanceCalendarScreen>
+    with TickerProviderStateMixin {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  // Animation Controllers
+  AnimationController? _animationController;
+  AnimationController? _cardAnimationController;
+
+  Animation<double>? _fadeAnimation;
+  Animation<Offset>? _slideAnimation;
+  Animation<double>? _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
-    // ✅ FIXED - Use addPostFrameCallback
+
+    // Initialize animations
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _cardAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController!, curve: Curves.easeIn),
+    );
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController!,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _cardAnimationController!, curve: Curves.easeOut),
+    );
+
+    _animationController!.forward();
+    _cardAnimationController!.forward();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAttendance();
     });
   }
 
+  @override
+  void dispose() {
+    _animationController?.dispose();
+    _cardAnimationController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadAttendance() async {
-    // Get student ID from Firebase Auth
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await ref.read(studentProvider.notifier).fetchAttendance(user.uid);
@@ -51,116 +96,159 @@ class _AttendanceCalendarScreenState
         )
         .toSet();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Attendance Calendar'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => _showLegendDialog(),
+    if (_fadeAnimation == null) {
+      return Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFA726),
+                Color(0xFFFF7043),
+                Color(0xFFEC407A),
+                Color(0xFFAB47BC),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: studentState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : studentState.error != null
-          ? _buildErrorWidget(studentState.error!)
-          : RefreshIndicator(
-              onRefresh: _loadAttendance,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    // Statistics Card
-                    _buildStatisticsCard(studentState),
+          child: Center(child: CircularProgressIndicator(color: Colors.white)),
+        ),
+      );
+    }
 
-                    // Calendar
-                    Card(
-                      margin: const EdgeInsets.all(16),
-                      child: TableCalendar(
-                        firstDay: DateTime.utc(2020, 1, 1),
-                        lastDay: DateTime.utc(2030, 12, 31),
-                        focusedDay: _focusedDay,
-                        calendarFormat: _calendarFormat,
-                        selectedDayPredicate: (day) {
-                          return isSameDay(_selectedDay, day);
-                        },
-                        onDaySelected: (selectedDay, focusedDay) {
-                          setState(() {
-                            _selectedDay = selectedDay;
-                            _focusedDay = focusedDay;
-                          });
-                        },
-                        onFormatChanged: (format) {
-                          setState(() {
-                            _calendarFormat = format;
-                          });
-                        },
-                        onPageChanged: (focusedDay) {
-                          _focusedDay = focusedDay;
-                        },
-                        calendarStyle: CalendarStyle(
-                          // Present days
-                          markerDecoration: const BoxDecoration(
-                            color: AppColors.present,
-                            shape: BoxShape.circle,
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFA726),
+              Color(0xFFFF7043),
+              Color(0xFFEC407A),
+              Color(0xFFAB47BC),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildCustomAppBar(),
+              Expanded(
+                child: studentState.isLoading
+                    ? Center(
+                        child: Container(
+                          padding: EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          // Today
-                          todayDecoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          // Selected day
-                          selectedDecoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          // Weekend days
-                          weekendTextStyle: const TextStyle(
-                            color: AppColors.error,
-                          ),
-                        ),
-                        eventLoader: (day) {
-                          final normalizedDay = DateTime(
-                            day.year,
-                            day.month,
-                            day.day,
-                          );
-                          return attendanceDates.contains(normalizedDay)
-                              ? ['present']
-                              : [];
-                        },
-                        calendarBuilders: CalendarBuilders(
-                          markerBuilder: (context, day, events) {
-                            if (events.isNotEmpty) {
-                              return Positioned(
-                                bottom: 1,
-                                child: Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.present,
-                                    shape: BoxShape.circle,
-                                  ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation(
+                                  Color(0xFFFF7043),
                                 ),
-                              );
-                            }
-                            return null;
-                          },
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'Loading attendance...',
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : studentState.error != null
+                    ? _buildErrorWidget(studentState.error!)
+                    : RefreshIndicator(
+                        onRefresh: _loadAttendance,
+                        color: Color(0xFFFF7043),
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(20),
+                          child: FadeTransition(
+                            opacity: _fadeAnimation!,
+                            child: SlideTransition(
+                              position: _slideAnimation!,
+                              child: Column(
+                                children: [
+                                  _buildStatisticsCard(studentState),
+                                  const SizedBox(height: 16),
+                                  _buildCalendarCard(attendanceDates),
+                                  if (_selectedDay != null) ...[
+                                    const SizedBox(height: 16),
+                                    _buildSelectedDayDetails(
+                                      _selectedDay!,
+                                      studentState.attendanceList,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                    // Selected Day Details
-                    if (_selectedDay != null)
-                      _buildSelectedDayDetails(
-                        _selectedDay!,
-                        studentState.attendanceList,
-                      ),
+  Widget _buildCustomAppBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text(
+                'Attendance',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
                   ],
                 ),
               ),
+            ],
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.white),
+              onPressed: () => _showLegendDialog(),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -181,69 +269,249 @@ class _AttendanceCalendarScreenState
         ? (monthlyAttendance / totalDays) * 100
         : 0;
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        children: [
-          Text(
-            DateFormatter.formatMonthYear(now),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+    return ScaleTransition(
+      scale: _scaleAnimation!,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem(
-                'Present',
-                monthlyAttendance.toString(),
-                Icons.check_circle,
-              ),
-              _buildStatItem(
-                'Total Days',
-                totalDays.toString(),
-                Icons.calendar_today,
-              ),
-              _buildStatItem(
-                'Percentage',
-                '${percentage.toStringAsFixed(1)}%',
-                Icons.percent,
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.calendar_month,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  DateFormatter.formatMonthYear(now),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+            Divider(height: 32, color: Colors.grey[300]),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  'Present',
+                  monthlyAttendance.toString(),
+                  Icons.check_circle,
+                  [Color(0xFF66BB6A), Color(0xFF81C784)],
+                ),
+                _buildStatItem(
+                  'Total Days',
+                  totalDays.toString(),
+                  Icons.calendar_today,
+                  [Color(0xFF42A5F5), Color(0xFF64B5F6)],
+                ),
+                _buildStatItem(
+                  'Percentage',
+                  '${percentage.toStringAsFixed(1)}%',
+                  Icons.trending_up,
+                  [Color(0xFFFFA726), Color(0xFFFFB74D)],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon) {
+  Widget _buildStatItem(
+    String label,
+    String value,
+    IconData icon,
+    List<Color> colors,
+  ) {
     return Column(
       children: [
-        Icon(icon, color: Colors.white, size: 32),
-        const SizedBox(height: 8),
+        Container(
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: colors),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: colors[0].withOpacity(0.4),
+                blurRadius: 8,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+        const SizedBox(height: 12),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 24,
+          style: TextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: Colors.grey[800],
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Colors.white70),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
+    );
+  }
+
+  Widget _buildCalendarCard(Set<DateTime> attendanceDates) {
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 500),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: 0.9 + (0.1 * value),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: TableCalendar(
+          firstDay: DateTime.utc(2020, 1, 1),
+          lastDay: DateTime.utc(2030, 12, 31),
+          focusedDay: _focusedDay,
+          calendarFormat: _calendarFormat,
+          selectedDayPredicate: (day) {
+            return isSameDay(_selectedDay, day);
+          },
+          onDaySelected: (selectedDay, focusedDay) {
+            setState(() {
+              _selectedDay = selectedDay;
+              _focusedDay = focusedDay;
+            });
+          },
+          onFormatChanged: (format) {
+            setState(() {
+              _calendarFormat = format;
+            });
+          },
+          onPageChanged: (focusedDay) {
+            _focusedDay = focusedDay;
+          },
+          headerStyle: HeaderStyle(
+            titleTextStyle: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+            formatButtonTextStyle: TextStyle(
+              color: Color(0xFFFF7043),
+              fontWeight: FontWeight.bold,
+            ),
+            formatButtonDecoration: BoxDecoration(
+              border: Border.all(color: Color(0xFFFF7043)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            leftChevronIcon: Icon(Icons.chevron_left, color: Color(0xFFFF7043)),
+            rightChevronIcon: Icon(
+              Icons.chevron_right,
+              color: Color(0xFFFF7043),
+            ),
+          ),
+          calendarStyle: CalendarStyle(
+            markerDecoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF66BB6A), Color(0xFF81C784)],
+              ),
+              shape: BoxShape.circle,
+            ),
+            todayDecoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFFFFA726).withOpacity(0.4),
+                  Color(0xFFFF7043).withOpacity(0.4),
+                ],
+              ),
+              shape: BoxShape.circle,
+            ),
+            selectedDecoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFFFF7043).withOpacity(0.4),
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            weekendTextStyle: TextStyle(color: Color(0xFFEF5350)),
+            todayTextStyle: TextStyle(
+              color: Colors.grey[800],
+              fontWeight: FontWeight.bold,
+            ),
+            selectedTextStyle: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          eventLoader: (day) {
+            final normalizedDay = DateTime(day.year, day.month, day.day);
+            return attendanceDates.contains(normalizedDay) ? ['present'] : [];
+          },
+          calendarBuilders: CalendarBuilders(
+            markerBuilder: (context, day, events) {
+              if (events.isNotEmpty) {
+                return Positioned(
+                  bottom: 1,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF66BB6A), Color(0xFF81C784)],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                );
+              }
+              return null;
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -251,7 +519,6 @@ class _AttendanceCalendarScreenState
     DateTime day,
     List<Attendance> attendanceList,
   ) {
-    // Find attendance for selected day
     Attendance? attendance;
     try {
       attendance = attendanceList.firstWhere(
@@ -261,45 +528,93 @@ class _AttendanceCalendarScreenState
       attendance = null;
     }
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 400),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(
-                  attendance != null ? Icons.check_circle : Icons.cancel,
-                  color: attendance != null
-                      ? AppColors.present
-                      : AppColors.absent,
+                Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: attendance != null
+                          ? [Color(0xFF66BB6A), Color(0xFF81C784)]
+                          : [Color(0xFFEF5350), Color(0xFFE57373)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    attendance != null ? Icons.check_circle : Icons.cancel,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Text(
                   DateFormatter.formatDate(day),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
                   ),
                 ),
               ],
             ),
-            const Divider(height: 24),
+            Divider(height: 24, color: Colors.grey[300]),
             if (attendance != null) ...[
-              _buildDetailRow('Status', 'Present'),
-              const SizedBox(height: 8),
+              _buildDetailRow('Status', 'Present', Icons.check_circle, [
+                Color(0xFF66BB6A),
+                Color(0xFF81C784),
+              ]),
+              const SizedBox(height: 12),
               _buildDetailRow(
                 'Marked At',
                 DateFormatter.formatTime(attendance.markedAt),
+                Icons.access_time,
+                [Color(0xFF42A5F5), Color(0xFF64B5F6)],
               ),
-              const SizedBox(height: 8),
-              _buildDetailRow('Method', attendance.method.toUpperCase()),
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                'Method',
+                attendance.method.toUpperCase(),
+                Icons.qr_code,
+                [Color(0xFFFFA726), Color(0xFFFFB74D)],
+              ),
             ] else ...[
-              const Text(
-                'No attendance marked for this day',
-                style: TextStyle(color: AppColors.textSecondary),
+              Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.grey[400], size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No attendance marked for this day',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -308,17 +623,42 @@ class _AttendanceCalendarScreenState
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(
+    String label,
+    String value,
+    IconData icon,
+    List<Color> colors,
+  ) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: colors),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: Colors.white, size: 16),
         ),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -326,28 +666,65 @@ class _AttendanceCalendarScreenState
 
   Widget _buildErrorWidget(String error) {
     return Center(
-      child: Padding(
+      child: Container(
+        margin: EdgeInsets.all(32),
         padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFEF5350), Color(0xFFE57373)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.error_outline, size: 48, color: Colors.white),
+            ),
+            const SizedBox(height: 20),
             Text(
               'Error',
-              style: TextStyle(fontSize: 18, color: Colors.red[700]),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               error,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadAttendance,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ElevatedButton.icon(
+                onPressed: _loadAttendance,
+                icon: const Icon(Icons.refresh),
+                label: const Text(
+                  'Retry',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -359,37 +736,84 @@ class _AttendanceCalendarScreenState
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Calendar Legend'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.info_outline, color: Colors.white, size: 20),
+            ),
+            SizedBox(width: 12),
+            Text('Calendar Legend'),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildLegendItem(AppColors.present, 'Present - Attendance marked'),
-            const SizedBox(height: 8),
-            _buildLegendItem(AppColors.primary.withOpacity(0.3), 'Today'),
-            const SizedBox(height: 8),
-            _buildLegendItem(AppColors.primary, 'Selected day'),
+            _buildLegendItem([
+              Color(0xFF66BB6A),
+              Color(0xFF81C784),
+            ], 'Present - Attendance marked'),
+            const SizedBox(height: 12),
+            _buildLegendItem([
+              Color(0xFFFFA726).withOpacity(0.4),
+              Color(0xFFFF7043).withOpacity(0.4),
+            ], 'Today'),
+            const SizedBox(height: 12),
+            _buildLegendItem([
+              Color(0xFFFFA726),
+              Color(0xFFFF7043),
+            ], 'Selected day'),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
+  Widget _buildLegendItem(List<Color> colors, String label) {
     return Row(
       children: [
         Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: colors),
+            shape: BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 12),
-        Text(label),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          ),
+        ),
       ],
     );
   }

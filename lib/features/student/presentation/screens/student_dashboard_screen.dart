@@ -16,19 +16,80 @@ class StudentDashboardScreen extends ConsumerStatefulWidget {
       _StudentDashboardScreenState();
 }
 
-class _StudentDashboardScreenState
-    extends ConsumerState<StudentDashboardScreen> {
+class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
+    with TickerProviderStateMixin {
+  // Animation Controllers
+  AnimationController? _animationController;
+  AnimationController? _cardAnimationController;
+  AnimationController? _fabController;
+
+  Animation<double>? _fadeAnimation;
+  Animation<Offset>? _slideAnimation;
+  Animation<double>? _cardScaleAnimation;
+  Animation<double>? _fabScaleAnimation;
+
   @override
   void initState() {
     super.initState();
-    // ✅ FIXED - Use addPostFrameCallback
+
+    // Initialize animations
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _cardAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController!, curve: Curves.easeIn),
+    );
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController!,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
+    _cardScaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _cardAnimationController!, curve: Curves.easeOut),
+    );
+
+    _fabScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fabController!, curve: Curves.elasticOut),
+    );
+
+    _animationController!.forward();
+    _cardAnimationController!.forward();
+
+    // Delay FAB animation
+    Future.delayed(Duration(milliseconds: 400), () {
+      if (mounted) _fabController!.forward();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
   }
 
+  @override
+  void dispose() {
+    _animationController?.dispose();
+    _cardAnimationController?.dispose();
+    _fabController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
-    // Get student ID from Firebase Auth
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await ref.read(studentProvider.notifier).fetchAttendance(user.uid);
@@ -39,54 +100,142 @@ class _StudentDashboardScreenState
   Widget build(BuildContext context) {
     final studentState = ref.watch(studentProvider);
 
+    if (_fadeAnimation == null) {
+      return Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFA726),
+                Color(0xFFFF7043),
+                Color(0xFFEC407A),
+                Color(0xFFAB47BC),
+              ],
+            ),
+          ),
+          child: Center(child: CircularProgressIndicator(color: Colors.white)),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Student Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () => context.go('/student/profile'),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFA726),
+              Color(0xFFFF7043),
+              Color(0xFFEC407A),
+              Color(0xFFAB47BC),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _handleLogout(context),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+        ),
+        child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Welcome Card
-              _buildWelcomeCard(),
-              const SizedBox(height: 20),
-
-              // School Name Card
-              _buildSchoolNameCard(),
-              const SizedBox(height: 20),
-
-              // Quick Actions
-              _buildQuickActionsSection(),
-              const SizedBox(height: 20),
-
-              // Attendance Summary
-              _buildAttendanceSummary(studentState),
-              const SizedBox(height: 20),
-
-              // Recent Attendance
-              _buildRecentAttendance(studentState),
+              _buildCustomAppBar(),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _loadData,
+                  color: Color(0xFFFF7043),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: FadeTransition(
+                      opacity: _fadeAnimation!,
+                      child: SlideTransition(
+                        position: _slideAnimation!,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildWelcomeCard(),
+                            const SizedBox(height: 16),
+                            _buildSchoolNameCard(),
+                            const SizedBox(height: 24),
+                            _buildQuickActionsSection(),
+                            const SizedBox(height: 24),
+                            _buildAttendanceSummary(studentState),
+                            const SizedBox(height: 24),
+                            _buildRecentAttendance(studentState),
+                            const SizedBox(height: 80), // Space for FAB
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/student/scan-qr'),
-        icon: const Icon(Icons.qr_code_scanner),
-        label: const Text('Mark Attendance'),
+      floatingActionButton: ScaleTransition(
+        scale: _fabScaleAnimation!,
+        child: FloatingActionButton.extended(
+          onPressed: () => context.push('/student/scan-qr'),
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text(
+            'Mark Attendance',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Color(0xFFFF7043),
+          elevation: 8,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomAppBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Dashboard',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.person, color: Colors.white),
+                  onPressed: () => context.go('/student/profile'),
+                ),
+              ),
+              SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.white),
+                  onPressed: () => _handleLogout(context),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -103,30 +252,60 @@ class _StudentDashboardScreenState
       greeting = 'Good Evening';
     }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            greeting,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+    return ScaleTransition(
+      scale: _cardScaleAnimation!,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            DateFormatter.formatDate(now),
-            style: const TextStyle(fontSize: 16, color: Colors.white70),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.wb_sunny_outlined,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    greeting,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormatter.formatDate(now),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -137,156 +316,133 @@ class _StudentDashboardScreenState
     return schoolInfo.when(
       data: (info) {
         if (info == null) {
-          // Show a fallback card if school info not found
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.school, color: Colors.orange[700], size: 32),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'School',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'School information not available',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.orange[900],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          return _buildInfoCard(
+            icon: Icons.school,
+            title: 'School',
+            subtitle: 'School information not available',
+            gradientColors: [Color(0xFFFF9800), Color(0xFFFFB74D)],
+            borderColor: Color(0xFFFF9800),
           );
         }
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue[200]!),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.school, color: Colors.blue[700], size: 32),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'School',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      info.name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[900],
-                      ),
-                    ),
-                    if (info.address != null && info.address!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        info.address!,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
+        return _buildInfoCard(
+          icon: Icons.school,
+          title: 'School',
+          subtitle: info.name,
+          description: info.address,
+          gradientColors: [Color(0xFF00ACC1), Color(0xFF26C6DA)],
+          borderColor: Color(0xFF00ACC1),
         );
       },
-      loading: () => Container(
-        padding: const EdgeInsets.all(16),
+      loading: () => _buildLoadingCard(),
+      error: (error, stack) {
+        return _buildInfoCard(
+          icon: Icons.error_outline,
+          title: 'School',
+          subtitle: 'Unable to load school information',
+          gradientColors: [Color(0xFFE53935), Color(0xFFEF5350)],
+          borderColor: Color(0xFFE53935),
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    String? description,
+    required List<Color> gradientColors,
+    required Color borderColor,
+  }) {
+    return ScaleTransition(
+      scale: _cardScaleAnimation!,
+      child: Container(
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: borderColor.withOpacity(0.2),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            Container(
+              padding: EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: gradientColors),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: Colors.white, size: 28),
             ),
-            const SizedBox(width: 12),
-            Text(
-              'Loading school info...',
-              style: TextStyle(color: Colors.grey[600]),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  if (description != null && description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
       ),
-      error: (error, stack) {
-        // Show error state instead of hiding
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.red[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red[200]!),
+    );
+  }
+
+  Widget _buildLoadingCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFF7043)),
+            ),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red[700], size: 32),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'School',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Unable to load school information',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.red[900],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          const SizedBox(width: 16),
+          Text(
+            'Loading school info...',
+            style: TextStyle(color: Colors.grey[600]),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -294,19 +450,31 @@ class _StudentDashboardScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Quick Actions',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                color: Colors.black26,
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: _buildQuickActionCard(
                 'Scan QR',
                 Icons.qr_code_scanner,
-                AppColors.primary,
+                [Color(0xFFFFA726), Color(0xFFFFB74D)],
                 () => context.push('/student/scan-qr'),
+                0,
               ),
             ),
             const SizedBox(width: 12),
@@ -314,8 +482,9 @@ class _StudentDashboardScreenState
               child: _buildQuickActionCard(
                 'Attendance',
                 Icons.calendar_today,
-                AppColors.success,
+                [Color(0xFF66BB6A), Color(0xFF81C784)],
                 () => context.push('/student/attendance'),
+                100,
               ),
             ),
           ],
@@ -327,8 +496,9 @@ class _StudentDashboardScreenState
               child: _buildQuickActionCard(
                 'Profile',
                 Icons.person,
-                AppColors.accent,
+                [Color(0xFFEC407A), Color(0xFFF06292)],
                 () => context.push('/student/profile'),
+                200,
               ),
             ),
             const SizedBox(width: 12),
@@ -336,10 +506,11 @@ class _StudentDashboardScreenState
               child: _buildQuickActionCard(
                 'Support',
                 Icons.help,
-                AppColors.info,
+                [Color(0xFF42A5F5), Color(0xFF64B5F6)],
                 () {
                   // Show support dialog
                 },
+                300,
               ),
             ),
           ],
@@ -351,32 +522,60 @@ class _StudentDashboardScreenState
   Widget _buildQuickActionCard(
     String title,
     IconData icon,
-    Color color,
+    List<Color> gradientColors,
     VoidCallback onTap,
+    int delay,
   ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 400),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: 0.8 + (0.2 * value),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: gradientColors[0].withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          ],
+            child: Column(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: gradientColors),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 28, color: Colors.white),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -403,29 +602,58 @@ class _StudentDashboardScreenState
         ? (monthlyAttendance / totalDays) * 100
         : 0;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return ScaleTransition(
+      scale: _cardScaleAnimation!,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'This Month',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+                    horizontal: 14,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: todayAttendance
-                        ? AppColors.success.withOpacity(0.1)
-                        : AppColors.error.withOpacity(0.1),
+                    gradient: LinearGradient(
+                      colors: todayAttendance
+                          ? [Color(0xFF66BB6A), Color(0xFF81C784)]
+                          : [Color(0xFFEF5350), Color(0xFFE57373)],
+                    ),
                     borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color:
+                            (todayAttendance
+                                    ? Color(0xFF66BB6A)
+                                    : Color(0xFFEF5350))
+                                .withOpacity(0.4),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -433,19 +661,15 @@ class _StudentDashboardScreenState
                       Icon(
                         todayAttendance ? Icons.check_circle : Icons.cancel,
                         size: 16,
-                        color: todayAttendance
-                            ? AppColors.success
-                            : AppColors.error,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       Text(
                         todayAttendance ? 'Present Today' : 'Absent Today',
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: todayAttendance
-                              ? AppColors.success
-                              : AppColors.error,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
                     ],
@@ -453,24 +677,23 @@ class _StudentDashboardScreenState
                 ),
               ],
             ),
-            const Divider(height: 24),
+            Divider(height: 32, color: Colors.grey[300]),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildSummaryItem(
-                  'Present',
-                  monthlyAttendance.toString(),
-                  AppColors.success,
-                ),
-                _buildSummaryItem(
-                  'Total Days',
-                  totalDays.toString(),
-                  AppColors.primary,
-                ),
+                _buildSummaryItem('Present', monthlyAttendance.toString(), [
+                  Color(0xFF66BB6A),
+                  Color(0xFF81C784),
+                ], Icons.check_circle),
+                _buildSummaryItem('Total Days', totalDays.toString(), [
+                  Color(0xFF42A5F5),
+                  Color(0xFF64B5F6),
+                ], Icons.calendar_today),
                 _buildSummaryItem(
                   'Percentage',
                   '${percentage.toStringAsFixed(1)}%',
-                  AppColors.accent,
+                  [Color(0xFFFFA726), Color(0xFFFFB74D)],
+                  Icons.trending_up,
                 ),
               ],
             ),
@@ -480,22 +703,33 @@ class _StudentDashboardScreenState
     );
   }
 
-  Widget _buildSummaryItem(String label, String value, Color color) {
+  Widget _buildSummaryItem(
+    String label,
+    String value,
+    List<Color> colors,
+    IconData icon,
+  ) {
     return Column(
       children: [
+        Container(
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: colors),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+        SizedBox(height: 8),
         Text(
           value,
           style: TextStyle(
-            fontSize: 28,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: color,
+            color: Colors.grey[800],
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -509,65 +743,168 @@ class _StudentDashboardScreenState
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Recent Attendance',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                shadows: [
+                  Shadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
             ),
             TextButton(
               onPressed: () => context.push('/student/attendance'),
-              child: const Text('View All'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.2),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'View All',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         if (recentAttendance.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
+          Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
                       Icons.calendar_today,
                       size: 48,
                       color: Colors.grey[400],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No attendance records yet',
-                      style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No attendance records yet',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Start marking your attendance',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                  ),
+                ],
               ),
             ),
           )
         else
-          ...recentAttendance.map((attendance) {
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppColors.success.withOpacity(0.1),
-                  child: const Icon(
-                    Icons.check_circle,
-                    color: AppColors.success,
-                  ),
+          ...recentAttendance.asMap().entries.map((entry) {
+            final index = entry.key;
+            final attendance = entry.value;
+
+            return TweenAnimationBuilder<double>(
+              duration: Duration(milliseconds: 300 + (index * 100)),
+              tween: Tween(begin: 0.0, end: 1.0),
+              curve: Curves.easeOut,
+              builder: (context, value, child) {
+                return Transform.translate(
+                  offset: Offset(0, 20 * (1 - value)),
+                  child: Opacity(opacity: value, child: child),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                title: Text(
-                  DateFormatter.formatDate(attendance.attendanceDate),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  'Marked at ${DateFormatter.formatTime(attendance.markedAt)}',
-                ),
-                trailing: Chip(
-                  label: Text(
-                    attendance.method.toUpperCase(),
-                    style: const TextStyle(fontSize: 10),
-                  ),
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF66BB6A), Color(0xFF81C784)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            DateFormatter.formatDate(attendance.attendanceDate),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Marked at ${DateFormatter.formatTime(attendance.markedAt)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFFA726), Color(0xFFFFB74D)],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        attendance.method.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -580,16 +917,50 @@ class _StudentDashboardScreenState
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFEF5350), Color(0xFFE57373)],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.logout, color: Colors.white, size: 24),
+            ),
+            SizedBox(width: 12),
+            Text('Logout'),
+          ],
+        ),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Logout'),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Logout',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
         ],
       ),
@@ -597,8 +968,9 @@ class _StudentDashboardScreenState
 
     if (confirm == true && context.mounted) {
       await ref.read(authProvider.notifier).logout();
-      // ignore: use_build_context_synchronously
-      context.go('/login');
+      if (context.mounted) {
+        context.go('/login');
+      }
     }
   }
 }
@@ -611,7 +983,6 @@ final studentSchoolProvider = FutureProvider.autoDispose<SchoolInfo?>((
   if (user == null) return null;
 
   try {
-    // Get user document to find school_id
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -621,7 +992,6 @@ final studentSchoolProvider = FutureProvider.autoDispose<SchoolInfo?>((
 
     var schoolId = userDoc.data()?['school_id'] as String?;
 
-    // If school_id not in user doc, try to get it from admission document
     if (schoolId == null || schoolId.isEmpty) {
       final admissionQuery = await FirebaseFirestore.instance
           .collection('students')
@@ -636,7 +1006,6 @@ final studentSchoolProvider = FutureProvider.autoDispose<SchoolInfo?>((
 
     if (schoolId == null || schoolId.isEmpty) return null;
 
-    // Get school document
     final schoolDoc = await FirebaseFirestore.instance
         .collection('schools')
         .doc(schoolId)

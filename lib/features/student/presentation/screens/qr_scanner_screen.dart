@@ -21,14 +21,13 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ Use addPostFrameCallback to avoid permission conflicts
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkPermission();
     });
   }
 
   Future<void> _checkPermission() async {
-    if (_isPermissionChecked) return; // Prevent multiple checks
+    if (_isPermissionChecked) return;
 
     setState(() {
       _isPermissionChecked = true;
@@ -104,7 +103,6 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       _hasScanned = true;
     });
 
-    // Mark attendance and wait for result
     ref.read(studentProvider.notifier).markAttendance(qrData).then((_) {
       final studentState = ref.read(studentProvider);
 
@@ -148,8 +146,8 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
         actions: [
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Go back to dashboard
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
             child: const Text('OK'),
           ),
@@ -173,16 +171,16 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Go back to dashboard
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
+              Navigator.pop(context);
               setState(() {
-                _hasScanned = false; // Allow scanning again
+                _hasScanned = false;
               });
             },
             child: const Text('Retry'),
@@ -205,6 +203,15 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan QR Code'),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFFA726), Color(0xFFFF7043), Color(0xFFEC407A)],
+            ),
+          ),
+        ),
         actions: [
           if (_controller != null)
             IconButton(
@@ -221,13 +228,8 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           ? _buildPermissionDenied()
           : Stack(
               children: [
-                // QR Scanner
                 MobileScanner(controller: _controller, onDetect: _onQRScanned),
-
-                // Scan area overlay
                 _buildScanOverlay(),
-
-                // Loading indicator
                 if (studentState.isLoading)
                   Container(
                     color: Colors.black54,
@@ -316,7 +318,6 @@ class ScannerOverlay extends CustomPainter {
     final top = (size.height - scanAreaSize) / 2;
     final rect = Rect.fromLTWH(left, top, scanAreaSize, scanAreaSize);
 
-    // Draw overlay with transparent center
     final path = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
       ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)))
@@ -324,9 +325,10 @@ class ScannerOverlay extends CustomPainter {
 
     canvas.drawPath(path, paint);
 
-    // Draw corner borders
+    // Changed corner color to match gradient theme
     final borderPaint = Paint()
-      ..color = AppColors.primary
+      ..color =
+          Color(0xFFFF7043) // Sunset gradient color
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4;
 
