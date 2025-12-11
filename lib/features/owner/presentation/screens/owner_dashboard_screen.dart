@@ -1,4 +1,7 @@
 import 'package:driveapp/features/owner/presentation/screens/owner_profile_screen.dart';
+import 'package:driveapp/features/owner/presentation/screens/owner_view_attendance_screen.dart';
+import 'package:driveapp/features/owner/presentation/screens/owner_view_form14_screen.dart';
+import 'package:driveapp/features/owner/presentation/screens/owner_view_form15_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -478,6 +481,107 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
               ),
               SizedBox(width: 8),
               _buildPaymentStatusChip(student.paymentStatus),
+            ],
+          ),
+          SizedBox(height: 12),
+          // Form and Attendance buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OwnerViewForm14Screen(
+                          studentId: student.userId,
+                          studentName: student.fullName,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.description, size: 16),
+                  label: const Text(
+                    'Form-14',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color: Color(0xFF42A5F5),
+                      width: 1.5,
+                    ),
+                    foregroundColor: const Color(0xFF42A5F5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OwnerViewForm15Screen(
+                          studentId: student.userId,
+                          studentName: student.fullName,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.access_time, size: 16),
+                  label: const Text(
+                    'Form-15',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color: Color(0xFFEC407A),
+                      width: 1.5,
+                    ),
+                    foregroundColor: const Color(0xFFEC407A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OwnerViewAttendanceScreen(
+                          studentId: student.userId,
+                          studentName: student.fullName,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.calendar_today, size: 16),
+                  label: const Text(
+                    'Attendance',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color: Color(0xFF66BB6A),
+                      width: 1.5,
+                    ),
+                    foregroundColor: const Color(0xFF66BB6A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
             ],
           ),
         ],

@@ -1,3 +1,5 @@
+import 'package:driveapp/features/student/presentation/screens/form14_enrollment_screen.dart';
+import 'package:driveapp/features/student/presentation/screens/form15_driving_hours_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -494,11 +496,49 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           children: [
             Expanded(
               child: _buildQuickActionCard(
+                'Form-14',
+                Icons.description,
+                [Color(0xFF42A5F5), Color(0xFF64B5F6)],
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const Form14EnrollmentScreen(),
+                    ),
+                  );
+                },
+                200,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildQuickActionCard(
+                'Form-15',
+                Icons.access_time,
+                [Color(0xFFEC407A), Color(0xFFF06292)],
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const Form15DrivingHoursScreen(),
+                    ),
+                  );
+                },
+                300,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickActionCard(
                 'Profile',
                 Icons.person,
-                [Color(0xFFEC407A), Color(0xFFF06292)],
+                [Color(0xFFAB47BC), Color(0xFFBA68C8)],
                 () => context.push('/student/profile'),
-                200,
+                400,
               ),
             ),
             const SizedBox(width: 12),
@@ -506,11 +546,26 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
               child: _buildQuickActionCard(
                 'Support',
                 Icons.help,
-                [Color(0xFF42A5F5), Color(0xFF64B5F6)],
+                [Color(0xFF7E57C2), Color(0xFF9575CD)],
                 () {
-                  // Show support dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.white),
+                          SizedBox(width: 12),
+                          Text('Support coming soon!'),
+                        ],
+                      ),
+                      backgroundColor: Color(0xFF7E57C2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
                 },
-                300,
+                500,
               ),
             ),
           ],

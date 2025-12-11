@@ -140,6 +140,7 @@ class StudentNotifier extends StateNotifier<StudentState> {
         'marked_at': FieldValue.serverTimestamp(),
         'method': 'QR',
         'device_info': deviceInfo,
+        'status': 'Present',
       });
 
       state = state.copyWith(
