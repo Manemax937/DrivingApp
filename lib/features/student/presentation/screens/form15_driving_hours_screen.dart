@@ -1,3 +1,4 @@
+import 'package:driveapp/core/services/pdf_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -203,6 +204,19 @@ class _Form15DrivingHoursScreenState
               ],
             ),
           ),
+          // Download PDF Button
+          if (_drivingHours.isNotEmpty)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.download, color: Colors.white),
+                onPressed: _downloadPDF,
+                tooltip: 'Download PDF',
+              ),
+            ),
         ],
       ),
     );
@@ -224,25 +238,25 @@ class _Form15DrivingHoursScreenState
       child: Column(
         children: [
           _buildSummaryCard(totalHours),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: _drivingHours.length,
-              itemBuilder: (context, index) {
-                return TweenAnimationBuilder<double>(
-                  duration: Duration(milliseconds: 300 + (index * 50)),
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  curve: Curves.easeOut,
-                  builder: (context, value, child) {
-                    return Transform.translate(
-                      offset: Offset(0, 20 * (1 - value)),
-                      child: Opacity(opacity: value, child: child),
-                    );
-                  },
-                  child: _buildDrivingHoursCard(_drivingHours[index]),
-                );
-              },
-            ),
+          ListView.builder(
+            shrinkWrap: true, // Add this
+            physics: NeverScrollableScrollPhysics(), // Add this
+            padding: const EdgeInsets.all(20),
+            itemCount: _drivingHours.length,
+            itemBuilder: (context, index) {
+              return TweenAnimationBuilder<double>(
+                duration: Duration(milliseconds: 300 + (index * 50)),
+                tween: Tween(begin: 0.0, end: 1.0),
+                curve: Curves.easeOut,
+                builder: (context, value, child) {
+                  return Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: Opacity(opacity: value, child: child),
+                  );
+                },
+                child: _buildDrivingHoursCard(_drivingHours[index]),
+              );
+            },
           ),
         ],
       ),
@@ -525,7 +539,7 @@ class _Form15DrivingHoursScreenState
                 child: Icon(Icons.add, color: Colors.white, size: 24),
               ),
               SizedBox(width: 12),
-              Text('Add Driving Hours'),
+              Text('Add Drive Hours'),
             ],
           ),
           content: SingleChildScrollView(
@@ -777,6 +791,123 @@ class _Form15DrivingHoursScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _downloadPDF() async {
+    if (_drivingHours.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Text('No driving hours to download'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Generating PDF...'),
+            ],
+          ),
+          backgroundColor: Color(0xFFFF7043),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Get user name
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final userName = userDoc.data()?['name'] ?? 'Student';
+
+      // Convert Form15DrivingHours objects to Map
+      final drivingHoursData = _drivingHours.map((hours) {
+        return {
+          'date': Timestamp.fromDate(hours.date),
+          'time_from': Timestamp.fromDate(hours.timeFrom),
+          'time_to': Timestamp.fromDate(hours.timeTo),
+          'hours_spent': hours.hoursSpent,
+          'vehicle_class': hours.vehicleClass,
+          'instructor_name': hours.instructorName,
+        };
+      }).toList();
+
+      // Call PDF service
+      await PDFService.downloadForm15PDF(
+        context: context,
+        studentName: userName,
+        drivingHours: drivingHoursData,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('PDF downloaded successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('Error: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _addDrivingHours(

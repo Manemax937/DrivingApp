@@ -68,7 +68,7 @@ class AdmissionFormFields {
     return TextFormField(
       controller: controller,
       decoration: const InputDecoration(
-        labelText: 'Email (optional)',
+        labelText: 'Email ',
         prefixIcon: Icon(Icons.email),
         border: OutlineInputBorder(),
       ),

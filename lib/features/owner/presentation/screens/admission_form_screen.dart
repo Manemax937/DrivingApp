@@ -193,14 +193,14 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
                               const SizedBox(height: 16),
                               _buildTextField(
                                 controller: _fatherNameController,
-                                label: "Father's Name (Optional)",
+                                label: "Father's Name",
                                 icon: Icons.person_outline,
                                 capitalization: TextCapitalization.words,
                               ),
                               const SizedBox(height: 16),
                               _buildTextField(
                                 controller: _addressController,
-                                label: 'Address (Optional)',
+                                label: 'Address',
                                 icon: Icons.location_on,
                                 maxLines: 3,
                                 capitalization: TextCapitalization.words,
@@ -240,7 +240,7 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
                               const SizedBox(height: 16),
                               _buildDropdown(
                                 value: _selectedLicenseType,
-                                label: 'License Type (Optional)',
+                                label: 'License Type ',
                                 icon: Icons.badge,
                                 items: const [
                                   DropdownMenuItem(
@@ -336,7 +336,7 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
                           ),
                           const SizedBox(height: 20),
                           _buildSectionCard(
-                            'Training Period (Optional)',
+                            'Training Period',
                             Icons.calendar_month,
                             [Color(0xFFEC407A), Color(0xFFF06292)],
                             [

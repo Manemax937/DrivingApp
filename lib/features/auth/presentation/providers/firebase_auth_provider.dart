@@ -296,13 +296,41 @@ class FirebaseAuthNotifier extends StateNotifier<FirebaseAuthState> {
 
   /// Send password reset email
   Future<bool> sendPasswordResetEmail(String email) async {
+    print('🔍 Starting password reset for: $email');
+
     state = state.copyWith(isLoading: true, error: null);
     try {
+      print('🔍 Calling Firebase sendPasswordResetEmail...');
+
       await _firebaseAuth.sendPasswordResetEmail(email: email);
+
+      print('✅ Firebase says email sent successfully!');
+      print('📧 Check email: $email (including spam folder)');
+
       state = state.copyWith(isLoading: false);
       return true;
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      print('❌ Firebase error: ${e.code}');
+      print('❌ Message: ${e.message}');
+
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No account exists with this email';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Invalid email format';
+          break;
+        default:
+          errorMessage = e.message ?? 'Failed to send reset email';
+      }
+
+      state = state.copyWith(isLoading: false, error: errorMessage);
+      return false;
     } catch (e, st) {
-      debugPrint('FirebaseAuthNotifier.sendPasswordResetEmail error: $e\n$st');
+      print('❌ Unexpected error: $e');
+      print('Stack trace: $st');
+
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to send reset email',

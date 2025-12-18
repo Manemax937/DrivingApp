@@ -1,13 +1,17 @@
+import 'package:driveapp/core/routes/app_router.dart';
+import 'package:driveapp/features/owner/presentation/screens/owner_dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/services/biometric_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/custom_button.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../providers/firebase_auth_provider.dart';
+
 import 'owner_registration_screen.dart';
 
 enum LoginRole { student, owner }
@@ -44,19 +48,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   void initState() {
     super.initState();
 
-    // Main animation controller
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
 
-    // Card animation controller
     _cardAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
 
-    // Pulse animation for logo
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -65,7 +66,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: Interval(0.0, 0.5, curve: Curves.easeIn),
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
       ),
     );
 
@@ -73,7 +74,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _animationController,
-            curve: Interval(0.3, 0.8, curve: Curves.easeOutCubic),
+            curve: const Interval(0.3, 0.8, curve: Curves.easeOutCubic),
           ),
         );
 
@@ -115,6 +116,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
+    // Biometric check listener - ONLY for owners
     ref.listen<FirebaseAuthState>(authProvider, (previous, next) async {
       if (next.isInitializing) return;
 
@@ -123,19 +125,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
       if (!justLoggedIn) return;
 
+      // Only owners require biometric authentication
       if (next.userRole == 'owner') {
-        final biometric = BiometricService();
-        final ok = await biometric.authenticate(reason: 'Verify owner access');
-        if (!mounted) return;
-        if (!ok) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Biometric verification required for owner login'),
-              backgroundColor: Colors.red,
-            ),
+        final prefs = await SharedPreferences.getInstance();
+        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        final key = 'last_biometric_check_$uid';
+
+        final lastBiometricCheck = prefs.getString(key);
+
+        bool needBiometric = true;
+
+        // Check if biometric was verified within the last hour
+        if (lastBiometricCheck != null && lastBiometricCheck.isNotEmpty) {
+          final lastCheck = DateTime.tryParse(lastBiometricCheck);
+          if (lastCheck != null &&
+              DateTime.now().difference(lastCheck).inHours < 1) {
+            needBiometric = false;
+          }
+        }
+
+        if (needBiometric) {
+          final biometric = BiometricService();
+          final ok = await biometric.authenticate(
+            reason: 'Verify owner access',
           );
-          await ref.read(authProvider.notifier).logout();
-          return;
+
+          if (!mounted) return;
+
+          if (!ok) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Biometric verification required for owner login',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+            await ref.read(authProvider.notifier).logout();
+            return;
+          }
+
+          // Store successful biometric verification timestamp
+          await prefs.setString(key, DateTime.now().toIso8601String());
         }
       }
 
@@ -143,6 +174,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       _navigateToRoleBasedHome(next.userRole);
     });
 
+    // Admission error listener
     ref.listen<FirebaseAuthState>(authProvider, (previous, next) {
       final prevError = previous?.error ?? '';
       final error = next.error ?? '';
@@ -180,7 +212,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
@@ -214,21 +246,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildAnimatedLogo() {
-    // Add null check
-    if (_fadeAnimation == null ||
-        _slideAnimation == null ||
-        _pulseAnimation == null) {
-      return SizedBox.shrink();
-    }
-
     return FadeTransition(
-      opacity: _fadeAnimation!,
+      opacity: _fadeAnimation,
       child: SlideTransition(
-        position: _slideAnimation!,
+        position: _slideAnimation,
         child: Column(
           children: [
             ScaleTransition(
-              scale: _pulseAnimation!,
+              scale: _pulseAnimation,
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -283,26 +308,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildAnimatedLoginCard(FirebaseAuthState authState) {
-    // Add null check to prevent errors during initialization
-    if (_cardAnimationController == null ||
-        _cardSlideAnimation == null ||
-        _scaleAnimation == null) {
-      return SizedBox.shrink();
-    }
-
     return AnimatedBuilder(
-      animation: _cardAnimationController!,
+      animation: _cardAnimationController,
       builder: (context, child) {
-        // Clamp values to ensure they stay within valid ranges
-        final slideValue = _cardSlideAnimation!.value.clamp(0.0, 100.0);
-        final scaleValue = _scaleAnimation!.value.clamp(0.0, 1.0);
+        final slideValue = _cardSlideAnimation.value.clamp(0.0, 100.0);
+        final scaleValue = _scaleAnimation.value.clamp(0.0, 1.0);
 
         return Transform.translate(
           offset: Offset(0, slideValue),
           child: Transform.scale(
             scale: scaleValue,
             child: Opacity(
-              opacity: scaleValue, // This is now guaranteed to be 0.0-1.0
+              opacity: scaleValue,
               child: Container(
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
@@ -310,7 +327,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: Color(0xFFAB47BC).withOpacity(0.3),
+                      color: const Color(0xFFAB47BC).withOpacity(0.3),
                       blurRadius: 30,
                       offset: const Offset(0, 15),
                       spreadRadius: -5,
@@ -322,14 +339,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Role Selector with warm colors
+                      // Role Selector
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              Color(0xFFFFA726).withOpacity(0.15),
-                              Color(0xFFEC407A).withOpacity(0.15),
+                              const Color(0xFFFFA726).withOpacity(0.15),
+                              const Color(0xFFEC407A).withOpacity(0.15),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(18),
@@ -364,7 +381,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               states,
                             ) {
                               if (states.contains(MaterialState.selected)) {
-                                return Color(0xFFFF7043);
+                                return const Color(0xFFFF7043);
                               }
                               return Colors.grey[600];
                             }),
@@ -379,21 +396,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       ),
                       const SizedBox(height: 28),
 
-                      // Header with gradient icon
+                      // Header
                       Column(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
+                              gradient: const LinearGradient(
                                 colors: [Color(0xFFFFA726), Color(0xFFEC407A)],
                               ),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Color(0xFFFF7043).withOpacity(0.4),
+                                  color: const Color(
+                                    0xFFFF7043,
+                                  ).withOpacity(0.4),
                                   blurRadius: 12,
-                                  offset: Offset(0, 6),
+                                  offset: const Offset(0, 6),
                                 ),
                               ],
                             ),
@@ -430,7 +449,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           controller: _schoolNameController,
                           label: 'School Name',
                           icon: Icons.school,
-                          iconColor: Color(0xFFFFA726),
+                          iconColor: const Color(0xFFFFA726),
                           textCapitalization: TextCapitalization.words,
                           validator: (value) {
                             if (_loginRole == LoginRole.student &&
@@ -448,7 +467,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         controller: _emailController,
                         label: 'Email Address',
                         icon: Icons.email,
-                        iconColor: Color(0xFFFF7043),
+                        iconColor: const Color(0xFFFF7043),
                         keyboardType: TextInputType.emailAddress,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -485,8 +504,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  Color(0xFFEC407A).withOpacity(0.2),
-                                  Color(0xFFAB47BC).withOpacity(0.2),
+                                  const Color(0xFFEC407A).withOpacity(0.2),
+                                  const Color(0xFFAB47BC).withOpacity(0.2),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(10),
@@ -541,7 +560,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           icon: const Icon(Icons.help_outline, size: 16),
                           label: const Text('Forgot Password?'),
                           style: TextButton.styleFrom(
-                            foregroundColor: Color(0xFFFF7043),
+                            foregroundColor: const Color(0xFFFF7043),
                             textStyle: const TextStyle(
                               fontWeight: FontWeight.w600,
                             ),
@@ -591,11 +610,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                       const SizedBox(height: 8),
 
-                      // Gradient Sign In Button
+                      // Sign In Button
                       Container(
                         height: 58,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
+                          gradient: const LinearGradient(
                             colors: [
                               Color(0xFFFFA726),
                               Color(0xFFFF7043),
@@ -605,7 +624,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0xFFFF7043).withOpacity(0.5),
+                              color: const Color(0xFFFF7043).withOpacity(0.5),
                               blurRadius: 16,
                               offset: const Offset(0, 8),
                             ),
@@ -633,9 +652,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     ),
                                   ),
                                 )
-                              : Row(
+                              : const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Icon(Icons.login_rounded, size: 22),
                                     SizedBox(width: 12),
                                     Text(
@@ -720,13 +739,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildAnimatedRegisterLink() {
-    // Add null check
-    if (_fadeAnimation == null) {
-      return SizedBox.shrink();
-    }
-
     return FadeTransition(
-      opacity: _fadeAnimation!,
+      opacity: _fadeAnimation,
       child: Column(
         children: [
           Row(
@@ -738,7 +752,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   color: Colors.white.withOpacity(0.95),
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  shadows: [
+                  shadows: const [
                     Shadow(
                       color: Colors.black26,
                       blurRadius: 4,
@@ -750,7 +764,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ],
           ),
           const SizedBox(height: 16),
-          // Owner Registration Button with animation
           TweenAnimationBuilder<double>(
             duration: const Duration(milliseconds: 600),
             tween: Tween(begin: 0.0, end: 1.0),
@@ -767,7 +780,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   BoxShadow(
                     color: Colors.white.withOpacity(0.2),
                     blurRadius: 12,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -783,14 +796,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     );
                   },
                   borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 28,
-                      vertical: 14,
-                    ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Icon(Icons.business, color: Colors.white, size: 22),
                         SizedBox(width: 10),
                         Text(
@@ -814,19 +824,64 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  void _handleLogin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (_loginRole == LoginRole.owner) {
+      // 🔐 OWNER LOGIN
       await ref.read(authProvider.notifier).login(email, password);
+
+      if (!mounted) return; // ✅ IMPORTANT
+
+      final authState = ref.read(authProvider);
+      if (!authState.isAuthenticated) return;
+
+      // 🔒 BIOMETRIC CHECK
+      final prefs = await SharedPreferences.getInstance();
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final key = 'last_biometric_check_$uid';
+
+      bool needBiometric = true;
+      final lastCheck = prefs.getString(key);
+
+      if (lastCheck != null) {
+        final last = DateTime.tryParse(lastCheck);
+        if (last != null && DateTime.now().difference(last).inHours < 1) {
+          needBiometric = false;
+        }
+      }
+
+      if (needBiometric) {
+        final biometric = BiometricService();
+        final ok = await biometric.authenticate(reason: 'Verify owner access');
+
+        if (!mounted) return;
+
+        if (!ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric verification required for owner login'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          await ref.read(authProvider.notifier).logout();
+          return;
+        }
+
+        await prefs.setString(key, DateTime.now().toIso8601String());
+      }
+
+      // ✅ FINAL FIX: USE GOROUTER (NOT Navigator)
+      if (!mounted) return;
+      context.go('/owner/dashboard');
+
       return;
     }
 
+    // 🎓 STUDENT LOGIN
     await _loginStudentWithAdmission(email, password);
   }
 
@@ -948,31 +1003,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.white),
-            SizedBox(width: 12),
+            const Icon(Icons.info_outline, color: Colors.white),
+            const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: Color(0xFFFF7043),
+        backgroundColor: const Color(0xFFFF7043),
       ),
     );
   }
 
   void _navigateToRoleBasedHome(String? role) {
+    final router = ref.read(routerProvider);
+
     switch (role) {
       case 'student':
-        context.go('/student/dashboard');
+        router.go('/student/dashboard');
         break;
       case 'instructor':
-        context.go('/instructor/dashboard');
+        router.go('/instructor/dashboard');
         break;
       case 'owner':
-        context.go('/owner/dashboard');
+        router.go('/owner/dashboard');
         break;
       default:
-        context.go('/login');
+        router.go('/login');
     }
   }
 
@@ -986,17 +1043,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         title: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [Color(0xFFFFA726), Color(0xFFEC407A)],
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.lock_reset, color: Colors.white, size: 24),
+              child: const Icon(
+                Icons.lock_reset,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
-            SizedBox(width: 12),
-            Text('Reset Password'),
+            const SizedBox(width: 12),
+            const Text('Reset Password'),
           ],
         ),
         content: Column(
@@ -1010,7 +1071,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               controller: emailController,
               decoration: InputDecoration(
                 labelText: 'Email Address',
-                prefixIcon: Icon(
+                prefixIcon: const Icon(
                   Icons.email_outlined,
                   color: Color(0xFFFF7043),
                 ),
@@ -1019,10 +1080,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Color(0xFFFF7043), width: 2),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFFF7043),
+                    width: 2,
+                  ),
                 ),
               ),
               keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
             ),
           ],
         ),
@@ -1033,39 +1098,195 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
           ElevatedButton(
             onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty) return;
+              final email = emailController.text.trim().toLowerCase();
 
-              final success = await ref
-                  .read(authProvider.notifier)
-                  .sendPasswordResetEmail(email);
-
-              if (context.mounted) {
-                Navigator.pop(context);
+              // Validate email
+              if (email.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      success
-                          ? 'Password reset email sent!'
-                          : 'Failed to send reset email',
-                    ),
-                    backgroundColor: success ? Colors.green : Colors.red,
+                    content: const Text('Please enter your email address'),
+                    backgroundColor: Colors.orange,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 );
+                return;
+              }
+
+              if (!email.contains('@') || !email.contains('.')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Please enter a valid email address'),
+                    backgroundColor: Colors.orange,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+                return;
+              }
+
+              // Show loading
+              if (context.mounted) {
+                Navigator.pop(context); // Close dialog first
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Text('Sending reset email...'),
+                      ],
+                    ),
+                    backgroundColor: const Color(0xFFFF7043),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+              }
+
+              print('📧 Requesting password reset for: $email');
+
+              final success = await ref
+                  .read(authProvider.notifier)
+                  .sendPasswordResetEmail(email);
+
+              if (context.mounted) {
+                // Clear any existing snackbars
+                ScaffoldMessenger.of(context).clearSnackBars();
+
+                if (success) {
+                  // Show detailed success dialog
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.check_circle,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text('Email Sent!'),
+                        ],
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'A password reset link has been sent to:',
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            email,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('Please check:'),
+                          const SizedBox(height: 8),
+                          _buildCheckItem('Your inbox'),
+                          _buildCheckItem('Spam/Junk folder'),
+                          _buildCheckItem('Promotions tab (Gmail)'),
+                          const SizedBox(height: 16),
+                          Text(
+                            'The link will expire in 1 hour.',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  // Show error
+                  final error =
+                      ref.read(authProvider).error ??
+                      'Failed to send reset email';
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(error)),
+                        ],
+                      ),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFFFF7043),
+              backgroundColor: const Color(0xFFFF7043),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
             child: const Text('Send'),
           ),
+        ],
+      ),
+    );
+  }
+
+  // Helper widget for the checklist
+  Widget _buildCheckItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
+            size: 16,
+            color: Color(0xFFFF7043),
+          ),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 14)),
         ],
       ),
     );

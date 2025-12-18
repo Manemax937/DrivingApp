@@ -178,11 +178,6 @@ class _OwnerViewForm15ScreenState extends State<OwnerViewForm15Screen> {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: IconButton(
-              icon: const Icon(Icons.download, color: Colors.white),
-              onPressed: _downloadPDF,
-              tooltip: 'Download PDF',
-            ),
           ),
         ],
       ),

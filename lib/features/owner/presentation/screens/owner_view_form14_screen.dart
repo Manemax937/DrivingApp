@@ -174,18 +174,6 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
               ],
             ),
           ),
-          // Download Button
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.download, color: Colors.white),
-              onPressed: _downloadPDF,
-              tooltip: 'Download PDF',
-            ),
-          ),
         ],
       ),
     );

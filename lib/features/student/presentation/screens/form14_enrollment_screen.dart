@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:driveapp/core/services/pdf_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -200,7 +201,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               child: Icon(Icons.photo_camera, color: Colors.white, size: 24),
             ),
             SizedBox(width: 12),
-            Text('Choose $title'),
+            Text('$title'),
           ],
         ),
         content: Column(
@@ -491,6 +492,19 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               ],
             ),
           ),
+          // Download PDF Button
+          if (_hasExistingData)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.download, color: Colors.white),
+                onPressed: _downloadPDF,
+                tooltip: 'Download PDF',
+              ),
+            ),
         ],
       ),
     );
@@ -553,14 +567,14 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
             [
               _buildTextField(
                 controller: _aadhaarNumberController,
-                label: 'Aadhaar Number (Optional)',
+                label: 'Aadhaar Number',
                 icon: Icons.credit_card,
                 keyboardType: TextInputType.number,
               ),
               SizedBox(height: 16),
               _buildTextField(
                 controller: _panNumberController,
-                label: 'PAN Number (Optional)',
+                label: 'PAN Number',
                 icon: Icons.card_membership,
                 capitalization: TextCapitalization.characters,
               ),
@@ -1172,6 +1186,72 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         if (isLearnerExpiry) _learnerLicenseExpiry = picked;
         if (isLicenseIssue) _drivingLicenseIssueDate = picked;
       });
+    }
+  }
+
+  Future<void> _downloadPDF() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Generating PDF...'),
+            ],
+          ),
+          backgroundColor: Color(0xFFFF7043),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+
+      // Fetch the form data
+      final snapshot = await FirebaseFirestore.instance
+          .collection('form14_enrollment')
+          .where('student_id', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (mounted) {
+          _showSnackBar('No data to download', isError: true);
+        }
+        return;
+      }
+
+      final formData = snapshot.docs.first.data();
+
+      // Call PDF service
+      await PDFService.downloadForm14PDF(
+        context: context,
+        studentName: _traineeNameController.text.trim(),
+        formData: formData,
+        userPhotoUrl: formData['user_photo_url'],
+        aadhaarPhotoUrl: formData['aadhaar_photo_url'],
+        panPhotoUrl: formData['pan_photo_url'],
+      );
+
+      if (mounted) {
+        _showSnackBar('PDF downloaded successfully!');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Error generating PDF: $e', isError: true);
+      }
     }
   }
 

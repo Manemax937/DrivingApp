@@ -133,7 +133,6 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
           child: Column(
             children: [
               _buildCustomAppBar(),
-              _buildSchoolHeader(schoolInfo),
               Expanded(
                 child: studentsStream.when(
                   data: (students) => _buildDashboardContent(students),
@@ -260,125 +259,122 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
     );
   }
 
-  Widget _buildSchoolHeader(AsyncValue<SchoolInfo?> schoolInfo) {
-    return schoolInfo.when(
-      data: (info) {
-        if (info == null) {
-          return SizedBox.shrink();
-        }
-        return ScaleTransition(
-          scale: _scaleAnimation!,
-          child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(Icons.school, color: Colors.white, size: 28),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        info.name,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      if (info.address != null && info.address!.isNotEmpty) ...[
-                        SizedBox(height: 4),
-                        Text(
-                          info.address!,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-      loading: () => Container(
-        margin: EdgeInsets.all(20),
-        child: LinearProgressIndicator(
-          valueColor: AlwaysStoppedAnimation(Colors.white.withOpacity(0.5)),
-          backgroundColor: Colors.white.withOpacity(0.2),
-        ),
-      ),
-      error: (e, _) => SizedBox.shrink(),
-    );
-  }
-
   Widget _buildDashboardContent(List<Student> students) {
+    final schoolInfo = ref.watch(ownerSchoolProvider);
+
     return FadeTransition(
       opacity: _fadeAnimation!,
       child: SlideTransition(
         position: _slideAnimation!,
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            _buildStatisticsSection(students),
-            _buildFilterSection(),
-            Expanded(
-              child: students.isEmpty
-                  ? _buildEmptyState()
-                  : RefreshIndicator(
-                      onRefresh: () async {
-                        setState(() {});
-                      },
-                      color: Color(0xFFFF7043),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: students.length,
-                        itemBuilder: (context, index) {
-                          return TweenAnimationBuilder<double>(
-                            duration: Duration(
-                              milliseconds: 300 + (index * 50),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // School Header
+              schoolInfo.when(
+                data: (info) {
+                  if (info == null) return SizedBox.shrink();
+                  return ScaleTransition(
+                    scale: _scaleAnimation!,
+                    child: Container(
+                      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
                             ),
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            curve: Curves.easeOut,
-                            builder: (context, value, child) {
-                              return Transform.translate(
-                                offset: Offset(0, 20 * (1 - value)),
-                                child: Opacity(opacity: value, child: child),
-                              );
-                            },
-                            child: _buildStudentCard(students[index]),
-                          );
-                        },
+                            child: Icon(
+                              Icons.school,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  info.name,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[800],
+                                  ),
+                                ),
+                                if (info.address != null &&
+                                    info.address!.isNotEmpty) ...[
+                                  SizedBox(height: 2),
+                                  Text(
+                                    info.address!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-            ),
-          ],
+                  );
+                },
+                loading: () => SizedBox.shrink(),
+                error: (e, _) => SizedBox.shrink(),
+              ),
+
+              const SizedBox(height: 8),
+              _buildStatisticsSection(students),
+              _buildFilterSection(),
+
+              // Student List or Empty State
+              students.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics: NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(20),
+                      itemCount: students.length,
+                      itemBuilder: (context, index) {
+                        return TweenAnimationBuilder<double>(
+                          duration: Duration(milliseconds: 300 + (index * 50)),
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          curve: Curves.easeOut,
+                          builder: (context, value, child) {
+                            return Transform.translate(
+                              offset: Offset(0, 20 * (1 - value)),
+                              child: Opacity(opacity: value, child: child),
+                            );
+                          },
+                          child: _buildStudentCard(students[index]),
+                        );
+                      },
+                    ),
+
+              // Add bottom padding for FAB
+              SizedBox(height: 80),
+            ],
+          ),
         ),
       ),
     );
@@ -872,10 +868,7 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Add your first student to get started',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-            ),
+            Text('', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
             const SizedBox(height: 24),
             Container(
               decoration: BoxDecoration(

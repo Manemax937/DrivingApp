@@ -11,7 +11,7 @@ class DrivingSchoolApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Driving School',
+      title: 'DriveSetu',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
