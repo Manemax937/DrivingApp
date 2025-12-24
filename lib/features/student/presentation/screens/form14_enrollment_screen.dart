@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import '../../../../core/utils/validators.dart';
 
 class Form14EnrollmentScreen extends ConsumerStatefulWidget {
   const Form14EnrollmentScreen({super.key});
@@ -18,63 +17,99 @@ class Form14EnrollmentScreen extends ConsumerStatefulWidget {
 
 class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
     with TickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  final _traineeNameController = TextEditingController();
-  final _relationNameController = TextEditingController();
-  final _permanentAddressController = TextEditingController();
-  final _temporaryAddressController = TextEditingController();
-  final _enrollmentNumberController = TextEditingController();
-  final _learnerLicenseController = TextEditingController();
-  final _drivingLicenseController = TextEditingController();
-  final _licensingAuthorityController = TextEditingController();
-  final _remarksController = TextEditingController();
-  final _aadhaarNumberController = TextEditingController();
-  final _panNumberController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
 
-  DateTime? _dateOfBirth;
-  DateTime? _enrollmentDate;
-  DateTime? _learnerLicenseExpiry;
-  DateTime? _courseCompletionDate;
-  DateTime? _testPassDate;
-  DateTime? _drivingLicenseIssueDate;
-  String _selectedVehicleClass = '2-Wheeler';
-  bool _isLoading = false;
-  bool _hasExistingData = false;
+  // Controllers
+  final traineeNameController = TextEditingController();
+  final guardianNameController = TextEditingController(); // NEW
+  final permanentAddressController = TextEditingController();
+  final temporaryAddressController = TextEditingController();
+  final enrollmentNumberController = TextEditingController();
+  final learnerLicenseController = TextEditingController();
+  final aadhaarNumberController = TextEditingController();
+  final panNumberController = TextEditingController();
+  final remarksController = TextEditingController();
+
+  // NEW: Driving school details
+  final drivingSchoolNameController = TextEditingController();
+  final drivingSchoolLicenseController = TextEditingController();
+  final drivingSchoolAddressController = TextEditingController();
+
+  // NEW: Certification
+  final instructorNameController = TextEditingController();
+
+  // Date fields
+  DateTime? dateOfBirth;
+  DateTime? enrollmentDate;
+  DateTime? trainingStartDate; // NEW
+  DateTime? trainingEndDate; // NEW
+  DateTime? learnerLicenseExpiry;
+  DateTime? courseCompletionDate;
+  DateTime? testPassDate;
+
+  // NEW: Guardian relation dropdown
+  String selectedGuardianRelation = 'S/O'; // NEW
+
+  // NEW: Certifying authority dropdown
+  String selectedCertifyingAuthority = 'Proprietor'; // NEW
+
+  // NEW: Vehicle classes (multi-select)
+  List<String> selectedVehicleClasses = ['2-Wheeler']; // NEW
+
+  bool isLoading = false;
+  bool hasExistingData = false;
 
   // Image upload fields
-  File? _userPhotoFile;
-  File? _aadhaarPhotoFile;
-  File? _panPhotoFile;
+  File? userPhotoFile;
+  File? aadhaarPhotoFile;
+  File? panPhotoFile;
+  String? existingUserPhotoUrl;
+  String? existingAadhaarPhotoUrl;
+  String? existingPanPhotoUrl;
+  bool isUploadingImages = false;
 
-  String? _existingUserPhotoUrl;
-  String? _existingAadhaarPhotoUrl;
-  String? _existingPanPhotoUrl;
-
-  bool _isUploadingImages = false;
-  final ImagePicker _picker = ImagePicker();
-
-  AnimationController? _animationController;
-  Animation<double>? _fadeAnimation;
+  final ImagePicker picker = ImagePicker();
+  AnimationController? animationController;
+  Animation<double>? fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
+    animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController!, curve: Curves.easeIn),
+    fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: animationController!, curve: Curves.easeIn),
     );
-    _animationController!.forward();
+    animationController!.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadExistingData();
     });
   }
 
+  @override
+  void dispose() {
+    animationController?.dispose();
+    traineeNameController.dispose();
+    guardianNameController.dispose();
+    permanentAddressController.dispose();
+    temporaryAddressController.dispose();
+    enrollmentNumberController.dispose();
+    learnerLicenseController.dispose();
+    aadhaarNumberController.dispose();
+    panNumberController.dispose();
+    remarksController.dispose();
+    drivingSchoolNameController.dispose();
+    drivingSchoolLicenseController.dispose();
+    drivingSchoolAddressController.dispose();
+    instructorNameController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadExistingData() async {
-    setState(() => _isLoading = true);
+    setState(() => isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -88,45 +123,64 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data();
         setState(() {
-          _hasExistingData = true;
-          _traineeNameController.text = data['trainee_name'] ?? '';
-          _relationNameController.text = data['relation_name'] ?? '';
-          _permanentAddressController.text = data['permanent_address'] ?? '';
-          _temporaryAddressController.text = data['temporary_address'] ?? '';
-          _enrollmentNumberController.text = data['enrollment_number'] ?? '';
-          _learnerLicenseController.text = data['learner_license_number'] ?? '';
-          _drivingLicenseController.text = data['driving_license_number'] ?? '';
-          _licensingAuthorityController.text =
-              data['licensing_authority'] ?? '';
-          _remarksController.text = data['remarks'] ?? '';
-          _aadhaarNumberController.text = data['aadhaar_number'] ?? '';
-          _panNumberController.text = data['pan_number'] ?? '';
-          _selectedVehicleClass = data['vehicle_class'] ?? '2-Wheeler';
+          hasExistingData = true;
 
-          _existingUserPhotoUrl = data['user_photo_url'];
-          _existingAadhaarPhotoUrl = data['aadhaar_photo_url'];
-          _existingPanPhotoUrl = data['pan_photo_url'];
+          traineeNameController.text = data['trainee_name'] ?? '';
+          guardianNameController.text = data['guardian_name'] ?? '';
+          selectedGuardianRelation = data['guardian_relation'] ?? 'S/O';
+          permanentAddressController.text = data['permanent_address'] ?? '';
+          temporaryAddressController.text = data['temporary_address'] ?? '';
+          enrollmentNumberController.text = data['enrollment_number'] ?? '';
+          learnerLicenseController.text = data['learner_license_number'] ?? '';
+          remarksController.text = data['remarks'] ?? '';
+          aadhaarNumberController.text = data['aadhaar_number'] ?? '';
+          panNumberController.text = data['pan_number'] ?? '';
+
+          // NEW fields
+          drivingSchoolNameController.text = data['driving_school_name'] ?? '';
+          drivingSchoolLicenseController.text =
+              data['driving_school_license_number'] ?? '';
+          drivingSchoolAddressController.text =
+              data['driving_school_address'] ?? '';
+          instructorNameController.text = data['instructor_name'] ?? '';
+          selectedCertifyingAuthority =
+              data['certifying_authority'] ?? 'Proprietor';
+
+          // Vehicle classes (list)
+          final vehicleClassesRaw = data['vehicle_classes'];
+          if (vehicleClassesRaw is List) {
+            selectedVehicleClasses = vehicleClassesRaw
+                .map((e) => e.toString())
+                .toList();
+          }
+
+          existingUserPhotoUrl = data['photo_url'];
+          existingAadhaarPhotoUrl = data['aadhaar_photo_url'];
+          existingPanPhotoUrl = data['pan_photo_url'];
 
           if (data['date_of_birth'] != null) {
-            _dateOfBirth = (data['date_of_birth'] as Timestamp).toDate();
+            dateOfBirth = (data['date_of_birth'] as Timestamp).toDate();
           }
           if (data['enrollment_date'] != null) {
-            _enrollmentDate = (data['enrollment_date'] as Timestamp).toDate();
+            enrollmentDate = (data['enrollment_date'] as Timestamp).toDate();
+          }
+          if (data['training_start_date'] != null) {
+            trainingStartDate = (data['training_start_date'] as Timestamp)
+                .toDate();
+          }
+          if (data['training_end_date'] != null) {
+            trainingEndDate = (data['training_end_date'] as Timestamp).toDate();
           }
           if (data['learner_license_expiry'] != null) {
-            _learnerLicenseExpiry =
-                (data['learner_license_expiry'] as Timestamp).toDate();
+            learnerLicenseExpiry = (data['learner_license_expiry'] as Timestamp)
+                .toDate();
           }
           if (data['course_completion_date'] != null) {
-            _courseCompletionDate =
-                (data['course_completion_date'] as Timestamp).toDate();
+            courseCompletionDate = (data['course_completion_date'] as Timestamp)
+                .toDate();
           }
           if (data['test_pass_date'] != null) {
-            _testPassDate = (data['test_pass_date'] as Timestamp).toDate();
-          }
-          if (data['driving_license_issue_date'] != null) {
-            _drivingLicenseIssueDate =
-                (data['driving_license_issue_date'] as Timestamp).toDate();
+            testPassDate = (data['test_pass_date'] as Timestamp).toDate();
           }
         });
       }
@@ -135,13 +189,13 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         _showSnackBar('Error loading data: $e', isError: true);
       }
     } finally {
-      setState(() => _isLoading = false);
+      setState(() => isLoading = false);
     }
   }
 
   Future<void> _pickImage(ImageSource source, String imageType) async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(
+      final XFile? pickedFile = await picker.pickImage(
         source: source,
         maxWidth: 1200,
         maxHeight: 1200,
@@ -152,13 +206,13 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         setState(() {
           switch (imageType) {
             case 'user':
-              _userPhotoFile = File(pickedFile.path);
+              userPhotoFile = File(pickedFile.path);
               break;
             case 'aadhaar':
-              _aadhaarPhotoFile = File(pickedFile.path);
+              aadhaarPhotoFile = File(pickedFile.path);
               break;
             case 'pan':
-              _panPhotoFile = File(pickedFile.path);
+              panPhotoFile = File(pickedFile.path);
               break;
           }
         });
@@ -171,7 +225,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
   }
 
   void _showImageSourceDialog(String imageType) {
-    String title = '';
+    String title;
     switch (imageType) {
       case 'user':
         title = 'User Photo';
@@ -182,6 +236,8 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       case 'pan':
         title = 'PAN Card';
         break;
+      default:
+        title = 'Photo';
     }
 
     showDialog(
@@ -191,17 +247,21 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         title: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.photo_camera, color: Colors.white, size: 24),
+              child: const Icon(
+                Icons.photo_camera,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
-            SizedBox(width: 12),
-            Text('$title'),
+            const SizedBox(width: 12),
+            Text(title),
           ],
         ),
         content: Column(
@@ -209,16 +269,20 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
           children: [
             ListTile(
               leading: Container(
-                padding: EdgeInsets.all(10),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [Color(0xFF42A5F5), Color(0xFF64B5F6)],
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.photo_camera, color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.photo_camera,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
-              title: Text('Camera'),
+              title: const Text('Camera'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.camera, imageType);
@@ -226,16 +290,20 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
             ),
             ListTile(
               leading: Container(
-                padding: EdgeInsets.all(10),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [Color(0xFF66BB6A), Color(0xFF81C784)],
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.photo_library, color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.photo_library,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
-              title: Text('Gallery'),
+              title: const Text('Gallery'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery, imageType);
@@ -248,8 +316,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
   }
 
   Future<Map<String, String?>> _uploadAllImages() async {
-    setState(() => _isUploadingImages = true);
-
+    setState(() => isUploadingImages = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -257,98 +324,60 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         return {};
       }
 
-      // Force refresh the ID token so Storage sees a fresh, valid token
-      try {
-        await user.getIdToken(true);
-        print('DEBUG: forced idToken refresh for uid=${user.uid}');
-      } catch (e) {
-        print('DEBUG: getIdToken(true) failed: $e');
-      }
+      String? userPhotoUrl = existingUserPhotoUrl;
+      String? aadhaarPhotoUrl = existingAadhaarPhotoUrl;
+      String? panPhotoUrl = existingPanPhotoUrl;
 
-      String? userPhotoUrl = _existingUserPhotoUrl;
-      String? aadhaarPhotoUrl = _existingAadhaarPhotoUrl;
-      String? panPhotoUrl = _existingPanPhotoUrl;
-
-      Future<String?> uploadFileWithFallback(File file, String destPath) async {
+      Future<String?> uploadFile(File file, String destPath) async {
         final ref = FirebaseStorage.instance.ref().child(destPath);
-        print('DEBUG: Uploading to: ${ref.fullPath} (bucket: ${ref.bucket})');
-
         try {
-          // Primary: resumable upload using putFile
-          final uploadTask = await ref.putFile(file);
-          final url = await ref.getDownloadURL();
-          print('DEBUG: upload succeeded for ${ref.fullPath} url=$url');
-          return url;
-        } on FirebaseException catch (e, st) {
-          print(
-            'DEBUG: putFile FirebaseException code=${e.code} message=${e.message}',
-          );
-          print(st);
-
-          // If resumable upload fails with permission/403 or resumable-specific error, try putData as fallback
-          try {
-            final bytes = await file.readAsBytes();
-            final snap = await ref.putData(bytes);
-            final url = await ref.getDownloadURL();
-            print(
-              'DEBUG: fallback putData succeeded for ${ref.fullPath} url=$url',
-            );
-            return url;
-          } on FirebaseException catch (e2, st2) {
-            print(
-              'DEBUG: fallback putData FirebaseException code=${e2.code} message=${e2.message}',
-            );
-            print(st2);
-            rethrow; // bubble up so caller can show error
-          } catch (e2, st2) {
-            print('DEBUG: fallback putData other error: $e2');
-            print(st2);
-            rethrow;
-          }
-        } catch (e, st) {
-          print('DEBUG: putFile other error: $e');
-          print(st);
+          await ref.putFile(file);
+          return await ref.getDownloadURL();
+        } catch (e) {
+          print('Upload error: $e');
           rethrow;
         }
       }
 
-      // Upload User Photo
-      if (_userPhotoFile != null) {
+      if (userPhotoFile != null) {
         final fileName =
             'user_photo_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final dest = 'form14_photos/user/$fileName';
-        userPhotoUrl = await uploadFileWithFallback(_userPhotoFile!, dest);
-      }
-
-      // Upload Aadhaar Photo
-      if (_aadhaarPhotoFile != null) {
-        final fileName =
-            'aadhaar_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final dest = 'form14_photos/aadhaar/$fileName';
-        aadhaarPhotoUrl = await uploadFileWithFallback(
-          _aadhaarPhotoFile!,
-          dest,
+        userPhotoUrl = await uploadFile(
+          userPhotoFile!,
+          'form14_photos/user/$fileName',
         );
       }
 
-      // Upload PAN Photo
-      if (_panPhotoFile != null) {
+      if (aadhaarPhotoFile != null) {
+        final fileName =
+            'aadhaar_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        aadhaarPhotoUrl = await uploadFile(
+          aadhaarPhotoFile!,
+          'form14_photos/aadhaar/$fileName',
+        );
+      }
+
+      if (panPhotoFile != null) {
         final fileName =
             'pan_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final dest = 'form14_photos/pan/$fileName';
-        panPhotoUrl = await uploadFileWithFallback(_panPhotoFile!, dest);
+        panPhotoUrl = await uploadFile(
+          panPhotoFile!,
+          'form14_photos/pan/$fileName',
+        );
       }
 
       return {
-        'user_photo_url': userPhotoUrl,
+        'photo_url': userPhotoUrl,
         'aadhaar_photo_url': aadhaarPhotoUrl,
         'pan_photo_url': panPhotoUrl,
       };
     } catch (e) {
-      if (mounted) _showSnackBar('Error uploading images: $e', isError: true);
+      if (mounted) {
+        _showSnackBar('Error uploading images: $e', isError: true);
+      }
       return {};
     } finally {
-      setState(() => _isUploadingImages = false);
+      setState(() => isUploadingImages = false);
     }
   }
 
@@ -361,7 +390,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               isError ? Icons.error_outline : Icons.check_circle,
               color: Colors.white,
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
         ),
@@ -373,27 +402,10 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
   }
 
   @override
-  void dispose() {
-    _animationController?.dispose();
-    _traineeNameController.dispose();
-    _relationNameController.dispose();
-    _permanentAddressController.dispose();
-    _temporaryAddressController.dispose();
-    _enrollmentNumberController.dispose();
-    _learnerLicenseController.dispose();
-    _drivingLicenseController.dispose();
-    _licensingAuthorityController.dispose();
-    _remarksController.dispose();
-    _aadhaarNumberController.dispose();
-    _panNumberController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -410,10 +422,10 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
             children: [
               _buildCustomAppBar(),
               Expanded(
-                child: _isLoading
+                child: isLoading
                     ? Center(
                         child: Container(
-                          padding: EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
@@ -421,12 +433,12 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              CircularProgressIndicator(
+                              const CircularProgressIndicator(
                                 valueColor: AlwaysStoppedAnimation(
                                   Color(0xFFFF7043),
                                 ),
                               ),
-                              SizedBox(height: 16),
+                              const SizedBox(height: 16),
                               Text(
                                 'Loading form...',
                                 style: TextStyle(
@@ -462,12 +474,12 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               onPressed: () => Navigator.pop(context),
             ),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'FORM-14',
                   style: TextStyle(
                     color: Colors.white,
@@ -492,8 +504,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               ],
             ),
           ),
-          // Download PDF Button
-          if (_hasExistingData)
+          if (hasExistingData)
             Container(
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
@@ -512,83 +523,142 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
 
   Widget _buildForm() {
     return Form(
-      key: _formKey,
+      key: formKey,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           // Document Upload Section
           _buildDocumentUploadCard(),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
 
+          // NEW: Driving School Details
+          _buildSectionCard(
+            'Driving School Details',
+            Icons.school,
+            const [Color(0xFFFF6F00), Color(0xFFFF8F00)],
+            [
+              _buildTextField(
+                controller: drivingSchoolNameController,
+                label: 'Driving School Name *',
+                icon: Icons.business,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
+                capitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: drivingSchoolLicenseController,
+                label: 'School License Number *',
+                icon: Icons.badge,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
+                capitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: drivingSchoolAddressController,
+                label: 'School Address *',
+                icon: Icons.location_on,
+                maxLines: 3,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
+                capitalization: TextCapitalization.words,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Basic Information
           _buildSectionCard(
             'Basic Information',
             Icons.person,
-            [Color(0xFFFFA726), Color(0xFFFFB74D)],
+            const [Color(0xFFFFA726), Color(0xFFFFB74D)],
             [
               _buildTextField(
-                controller: _enrollmentNumberController,
+                controller: enrollmentNumberController,
                 label: 'Enrollment Number *',
                 icon: Icons.numbers,
                 validator: (value) =>
                     value?.isEmpty ?? true ? 'Required' : null,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(
-                controller: _traineeNameController,
+                controller: traineeNameController,
                 label: 'Trainee Name *',
                 icon: Icons.person,
-                validator: Validators.validateName,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
                 capitalization: TextCapitalization.words,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
+              // NEW: Guardian Name
               _buildTextField(
-                controller: _relationNameController,
-                label: 'Son/Wife/Daughter of *',
+                controller: guardianNameController,
+                label: 'Guardian Name *',
                 icon: Icons.family_restroom,
                 validator: (value) =>
                     value?.isEmpty ?? true ? 'Required' : null,
                 capitalization: TextCapitalization.words,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
+              // NEW: Guardian Relation Dropdown
+              _buildDropdown(
+                value: selectedGuardianRelation,
+                label: 'Guardian Relation *',
+                icon: Icons.people,
+                items: const [
+                  DropdownMenuItem(value: 'S/O', child: Text('S/O (Son of)')),
+                  DropdownMenuItem(
+                    value: 'D/O',
+                    child: Text('D/O (Daughter of)'),
+                  ),
+                  DropdownMenuItem(value: 'W/O', child: Text('W/O (Wife of)')),
+                ],
+                onChanged: (value) {
+                  setState(() => selectedGuardianRelation = value!);
+                },
+              ),
+              const SizedBox(height: 16),
               _buildDatePicker(
-                date: _dateOfBirth,
+                date: dateOfBirth,
                 label: 'Date of Birth *',
                 onTap: () => _selectDate(context, isDateOfBirth: true),
               ),
             ],
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
 
           // Identity Documents Section
           _buildSectionCard(
             'Identity Documents',
             Icons.credit_card,
-            [Color(0xFFEC407A), Color(0xFFF06292)],
+            const [Color(0xFFEC407A), Color(0xFFF06292)],
             [
               _buildTextField(
-                controller: _aadhaarNumberController,
+                controller: aadhaarNumberController,
                 label: 'Aadhaar Number',
                 icon: Icons.credit_card,
                 keyboardType: TextInputType.number,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(
-                controller: _panNumberController,
+                controller: panNumberController,
                 label: 'PAN Number',
                 icon: Icons.card_membership,
                 capitalization: TextCapitalization.characters,
               ),
             ],
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
 
+          // Address Details
           _buildSectionCard(
             'Address Details',
             Icons.location_on,
-            [Color(0xFF42A5F5), Color(0xFF64B5F6)],
+            const [Color(0xFF42A5F5), Color(0xFF64B5F6)],
             [
               _buildTextField(
-                controller: _permanentAddressController,
+                controller: permanentAddressController,
                 label: 'Permanent Address *',
                 icon: Icons.home,
                 maxLines: 3,
@@ -596,9 +666,9 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
                     value?.isEmpty ?? true ? 'Required' : null,
                 capitalization: TextCapitalization.words,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(
-                controller: _temporaryAddressController,
+                controller: temporaryAddressController,
                 label: 'Temporary/Official Address (Optional)',
                 icon: Icons.location_city,
                 maxLines: 3,
@@ -606,109 +676,118 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               ),
             ],
           ),
-          SizedBox(height: 20),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
+
+          // Training Details (UPDATED)
           _buildSectionCard(
             'Training Details',
             Icons.directions_car,
-            [const Color(0xFF66BB6A), const Color(0xFF81C784)],
+            const [Color(0xFF66BB6A), Color(0xFF81C784)],
             [
-              SizedBox(
-                width: double.infinity,
-                child: _buildDropdown(
-                  value: _selectedVehicleClass,
-                  label: 'Class of Vehicle *',
-                  icon: Icons.directions_car,
-                  items: const [
-                    DropdownMenuItem(
-                      value: '2-Wheeler',
-                      child: Text('2-Wheeler'),
-                    ),
-                    DropdownMenuItem(
-                      value: '4-Wheeler',
-                      child: Text('4-Wheeler'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'LMV',
-                      child: Text('LMV (Light Motor Vehicle)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'HMV',
-                      child: Text('HMV (Heavy Motor Vehicle)'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _selectedVehicleClass = value!);
-                  },
-                ),
-              ),
+              // NEW: Vehicle Classes Multi-Select
+              _buildVehicleClassesSelector(),
               const SizedBox(height: 16),
               _buildDatePicker(
-                date: _enrollmentDate,
+                date: enrollmentDate,
                 label: 'Date of Enrollment *',
                 onTap: () => _selectDate(context, isEnrollmentDate: true),
               ),
               const SizedBox(height: 16),
+              // NEW: Training Start Date
               _buildDatePicker(
-                date: _courseCompletionDate,
+                date: trainingStartDate,
+                label: 'Training Start Date *',
+                onTap: () => _selectDate(context, isTrainingStart: true),
+              ),
+              const SizedBox(height: 16),
+              // NEW: Training End Date
+              _buildDatePicker(
+                date: trainingEndDate,
+                label: 'Training End Date *',
+                onTap: () => _selectDate(context, isTrainingEnd: true),
+              ),
+              const SizedBox(height: 16),
+              _buildDatePicker(
+                date: courseCompletionDate,
                 label: 'Course Completion Date (Optional)',
                 onTap: () => _selectDate(context, isCourseCompletion: true),
               ),
               const SizedBox(height: 16),
               _buildDatePicker(
-                date: _testPassDate,
+                date: testPassDate,
                 label: 'Test Pass Date (Optional)',
                 onTap: () => _selectDate(context, isTestPass: true),
               ),
             ],
           ),
+          const SizedBox(height: 20),
 
-          SizedBox(height: 20),
+          // License Information
           _buildSectionCard(
             'License Information',
             Icons.badge,
-            [Color(0xFF7E57C2), Color(0xFF9575CD)],
+            const [Color(0xFF7E57C2), Color(0xFF9575CD)],
             [
               _buildTextField(
-                controller: _learnerLicenseController,
-                label: "Learner's License Number (Optional)",
+                controller: learnerLicenseController,
+                label: 'Learner\'s License Number (Optional)',
                 icon: Icons.credit_card,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildDatePicker(
-                date: _learnerLicenseExpiry,
-                label: "Learner's License Expiry (Optional)",
+                date: learnerLicenseExpiry,
+                label: 'Learner\'s License Expiry (Optional)',
                 onTap: () => _selectDate(context, isLearnerExpiry: true),
-              ),
-              SizedBox(height: 16),
-              _buildTextField(
-                controller: _drivingLicenseController,
-                label: 'Driving License Number (Optional)',
-                icon: Icons.card_membership,
-              ),
-              SizedBox(height: 16),
-              _buildDatePicker(
-                date: _drivingLicenseIssueDate,
-                label: 'License Issue Date (Optional)',
-                onTap: () => _selectDate(context, isLicenseIssue: true),
-              ),
-              SizedBox(height: 16),
-              _buildTextField(
-                controller: _licensingAuthorityController,
-                label: 'Licensing Authority (Optional)',
-                icon: Icons.account_balance,
-                capitalization: TextCapitalization.words,
               ),
             ],
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
+
+          // NEW: Certification Section
+          _buildSectionCard(
+            'Certification',
+            Icons.verified,
+            const [Color(0xFF26A69A), Color(0xFF4DB6AC)],
+            [
+              _buildTextField(
+                controller: instructorNameController,
+                label: 'Instructor Name *',
+                icon: Icons.person_outline,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
+                capitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 16),
+              _buildDropdown(
+                value: selectedCertifyingAuthority,
+                label: 'Certifying Authority *',
+                icon: Icons.admin_panel_settings,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Proprietor',
+                    child: Text('Proprietor'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Head Instructor',
+                    child: Text('Head Instructor'),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() => selectedCertifyingAuthority = value!);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Additional Information
           _buildSectionCard(
             'Additional Information',
             Icons.notes,
-            [Color(0xFFAB47BC), Color(0xFFBA68C8)],
+            const [Color(0xFFAB47BC), Color(0xFFBA68C8)],
             [
               _buildTextField(
-                controller: _remarksController,
+                controller: remarksController,
                 label: 'Remarks (Optional)',
                 icon: Icons.comment,
                 maxLines: 4,
@@ -716,99 +795,140 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               ),
             ],
           ),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
+
           _buildSubmitButton(),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildDocumentUploadCard() {
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 500),
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOut,
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: 0.95 + (0.05 * value),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
+  // NEW: Vehicle Classes Multi-Selector
+  Widget _buildVehicleClassesSelector() {
+    final allClasses = ['2-Wheeler', '4-Wheeler', 'LMV', 'HMV'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFEC407A), Color(0xFFF06292)],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.photo_library,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                SizedBox(width: 12),
-                Text(
-                  'Document Uploads',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
+            const Icon(
+              Icons.directions_car,
+              color: Color(0xFFFF7043),
+              size: 20,
             ),
-            const SizedBox(height: 20),
-
-            // User Photo
-            _buildImageUploadBox(
-              title: 'User Photo',
-              file: _userPhotoFile,
-              existingUrl: _existingUserPhotoUrl,
-              onTap: () => _showImageSourceDialog('user'),
-              gradient: [Color(0xFF42A5F5), Color(0xFF64B5F6)],
-            ),
-            SizedBox(height: 16),
-
-            // Aadhaar Card Photo
-            _buildImageUploadBox(
-              title: 'Aadhaar Card Photo',
-              file: _aadhaarPhotoFile,
-              existingUrl: _existingAadhaarPhotoUrl,
-              onTap: () => _showImageSourceDialog('aadhaar'),
-              gradient: [Color(0xFF66BB6A), Color(0xFF81C784)],
-            ),
-            SizedBox(height: 16),
-
-            // PAN Card Photo
-            _buildImageUploadBox(
-              title: 'PAN Card Photo',
-              file: _panPhotoFile,
-              existingUrl: _existingPanPhotoUrl,
-              onTap: () => _showImageSourceDialog('pan'),
-              gradient: [Color(0xFFFFA726), Color(0xFFFFB74D)],
+            const SizedBox(width: 8),
+            const Text(
+              'Vehicle Classes *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: allClasses.map((vehicleClass) {
+            final isSelected = selectedVehicleClasses.contains(vehicleClass);
+            return FilterChip(
+              label: Text(vehicleClass),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    selectedVehicleClasses.add(vehicleClass);
+                  } else {
+                    selectedVehicleClasses.remove(vehicleClass);
+                  }
+                });
+              },
+              selectedColor: const Color(0xFFFF7043).withOpacity(0.3),
+              checkmarkColor: const Color(0xFFFF7043),
+              backgroundColor: Colors.grey[200],
+              labelStyle: TextStyle(
+                color: isSelected ? const Color(0xFFFF7043) : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDocumentUploadCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEC407A), Color(0xFFF06292)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.photo_library,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Document Uploads',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildImageUploadBox(
+            title: 'User Photo',
+            file: userPhotoFile,
+            existingUrl: existingUserPhotoUrl,
+            onTap: () => _showImageSourceDialog('user'),
+            gradient: const [Color(0xFF42A5F5), Color(0xFF64B5F6)],
+          ),
+          const SizedBox(height: 16),
+          _buildImageUploadBox(
+            title: 'Aadhaar Card Photo',
+            file: aadhaarPhotoFile,
+            existingUrl: existingAadhaarPhotoUrl,
+            onTap: () => _showImageSourceDialog('aadhaar'),
+            gradient: const [Color(0xFF66BB6A), Color(0xFF81C784)],
+          ),
+          const SizedBox(height: 16),
+          _buildImageUploadBox(
+            title: 'PAN Card Photo',
+            file: panPhotoFile,
+            existingUrl: existingPanPhotoUrl,
+            onTap: () => _showImageSourceDialog('pan'),
+            gradient: const [Color(0xFFFFA726), Color(0xFFFFB74D)],
+          ),
+        ],
       ),
     );
   }
@@ -826,25 +946,25 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         Row(
           children: [
             Container(
-              padding: EdgeInsets.all(6),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: gradient),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(Icons.image, color: Colors.white, size: 16),
+              child: const Icon(Icons.image, color: Colors.white, size: 16),
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
+                color: Colors.black87,
               ),
             ),
           ],
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         GestureDetector(
           onTap: onTap,
           child: Container(
@@ -878,9 +998,8 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
                           ),
                         );
                       },
-                      errorBuilder: (context, error, stackTrace) {
-                        return _buildPlaceholder(title, gradient);
-                      },
+                      errorBuilder: (context, error, stackTrace) =>
+                          _buildPlaceholder(title, gradient),
                     ),
                   )
                 : _buildPlaceholder(title, gradient),
@@ -895,14 +1014,14 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          padding: EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             gradient: LinearGradient(colors: gradient),
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.add_a_photo, color: Colors.white, size: 28),
+          child: const Icon(Icons.add_a_photo, color: Colors.white, size: 28),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
           'Tap to add $title',
           style: TextStyle(
@@ -921,58 +1040,46 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
     List<Color> colors,
     List<Widget> children,
   ) {
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 500),
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOut,
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: 0.95 + (0.05 * value),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: colors),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: colors),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            ...children,
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
       ),
     );
   }
@@ -990,7 +1097,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: Color(0xFFFF7043)),
+        prefixIcon: Icon(icon, color: const Color(0xFFFF7043)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1001,7 +1108,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Color(0xFFFF7043), width: 2),
+          borderSide: const BorderSide(color: Color(0xFFFF7043), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1024,39 +1131,34 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
     required List<DropdownMenuItem<String>> items,
     required void Function(String?) onChanged,
   }) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(
-        maxHeight: 56, // fixed height to prevent overflow
-      ),
-      child: DropdownButtonFormField<String>(
-        value: value,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: const Color(0xFFFF7043)),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
-          ), // reduced padding
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey[300]!),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey[300]!),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFFF7043), width: 2),
-          ),
-          filled: true,
-          fillColor: Colors.grey[50],
-          isDense: true, // makes the field more compact
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFFFF7043)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
         ),
-        items: items,
-        onChanged: onChanged,
-        isExpanded: true, // ensures text doesn't overflow horizontally
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFFF7043), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey[50],
+        isDense: true,
       ),
+      items: items,
+      onChanged: onChanged,
+      isExpanded: true,
     );
   }
 
@@ -1069,7 +1171,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.grey[50],
           borderRadius: BorderRadius.circular(12),
@@ -1077,13 +1179,13 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
         ),
         child: Row(
           children: [
-            Icon(Icons.calendar_today, color: Color(0xFFFF7043)),
-            SizedBox(width: 12),
+            const Icon(Icons.calendar_today, color: Color(0xFFFF7043)),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 date == null
                     ? label
-                    : '$label: ${date.day}/${date.month}/${date.year}',
+                    : '${label}: ${date.day}/${date.month}/${date.year}',
                 style: TextStyle(
                   fontSize: 16,
                   color: date == null ? Colors.grey[600] : Colors.grey[800],
@@ -1101,20 +1203,20 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Color(0xFFFF7043).withOpacity(0.4),
+            color: const Color(0xFFFF7043).withOpacity(0.4),
             blurRadius: 12,
-            offset: Offset(0, 6),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ElevatedButton.icon(
-        onPressed: (_isLoading || _isUploadingImages) ? null : _handleSubmit,
+        onPressed: isLoading || isUploadingImages ? null : _handleSubmit,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
@@ -1122,8 +1224,8 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        icon: (_isLoading || _isUploadingImages)
-            ? SizedBox(
+        icon: isLoading || isUploadingImages
+            ? const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
@@ -1133,12 +1235,12 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
               )
             : const Icon(Icons.save, color: Colors.white),
         label: Text(
-          (_isLoading || _isUploadingImages)
+          isLoading || isUploadingImages
               ? 'Saving...'
-              : _hasExistingData
+              : hasExistingData
               ? 'Update Form-14'
               : 'Submit Form-14',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -1152,10 +1254,11 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
     BuildContext context, {
     bool isDateOfBirth = false,
     bool isEnrollmentDate = false,
+    bool isTrainingStart = false,
+    bool isTrainingEnd = false,
     bool isCourseCompletion = false,
     bool isTestPass = false,
     bool isLearnerExpiry = false,
-    bool isLicenseIssue = false,
   }) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -1165,11 +1268,11 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: Color(0xFFFF7043),
               onPrimary: Colors.white,
               surface: Colors.white,
-              onSurface: Colors.grey[800]!,
+              onSurface: Colors.black87,
             ),
           ),
           child: child!,
@@ -1179,12 +1282,13 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
 
     if (picked != null) {
       setState(() {
-        if (isDateOfBirth) _dateOfBirth = picked;
-        if (isEnrollmentDate) _enrollmentDate = picked;
-        if (isCourseCompletion) _courseCompletionDate = picked;
-        if (isTestPass) _testPassDate = picked;
-        if (isLearnerExpiry) _learnerLicenseExpiry = picked;
-        if (isLicenseIssue) _drivingLicenseIssueDate = picked;
+        if (isDateOfBirth) dateOfBirth = picked;
+        if (isEnrollmentDate) enrollmentDate = picked;
+        if (isTrainingStart) trainingStartDate = picked;
+        if (isTrainingEnd) trainingEndDate = picked;
+        if (isCourseCompletion) courseCompletionDate = picked;
+        if (isTestPass) testPassDate = picked;
+        if (isLearnerExpiry) learnerLicenseExpiry = picked;
       });
     }
   }
@@ -1194,32 +1298,8 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Show loading message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(width: 12),
-              Text('Generating PDF...'),
-            ],
-          ),
-          backgroundColor: Color(0xFFFF7043),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      _showSnackBar('Generating PDF...');
 
-      // Fetch the form data
       final snapshot = await FirebaseFirestore.instance
           .collection('form14_enrollment')
           .where('student_id', isEqualTo: user.uid)
@@ -1227,20 +1307,17 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
           .get();
 
       if (snapshot.docs.isEmpty) {
-        if (mounted) {
-          _showSnackBar('No data to download', isError: true);
-        }
+        _showSnackBar('No data to download', isError: true);
         return;
       }
 
       final formData = snapshot.docs.first.data();
 
-      // Call PDF service
       await PDFService.downloadForm14PDF(
         context: context,
-        studentName: _traineeNameController.text.trim(),
+        studentName: traineeNameController.text.trim(),
         formData: formData,
-        userPhotoUrl: formData['user_photo_url'],
+        userPhotoUrl: formData['photo_url'],
         aadhaarPhotoUrl: formData['aadhaar_photo_url'],
         panPhotoUrl: formData['pan_photo_url'],
       );
@@ -1256,19 +1333,24 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
   }
 
   Future<void> _handleSubmit() async {
-    if (!_formKey.currentState!.validate()) {
+    if (!formKey.currentState!.validate()) return;
+
+    // Validate required dates
+    if (dateOfBirth == null ||
+        enrollmentDate == null ||
+        trainingStartDate == null ||
+        trainingEndDate == null) {
+      _showSnackBar('Please select all required dates', isError: true);
       return;
     }
 
-    if (_dateOfBirth == null || _enrollmentDate == null) {
-      _showSnackBar(
-        'Please select Date of Birth and Enrollment Date',
-        isError: true,
-      );
+    // Validate vehicle classes
+    if (selectedVehicleClasses.isEmpty) {
+      _showSnackBar('Please select at least one vehicle class', isError: true);
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => isLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -1287,39 +1369,58 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       final data = {
         'student_id': user.uid,
         'school_id': schoolId,
-        'enrollment_number': _enrollmentNumberController.text.trim(),
-        'trainee_name': _traineeNameController.text.trim(),
-        'relation_name': _relationNameController.text.trim(),
-        'permanent_address': _permanentAddressController.text.trim(),
-        'temporary_address': _temporaryAddressController.text.trim(),
-        'date_of_birth': Timestamp.fromDate(_dateOfBirth!),
-        'vehicle_class': _selectedVehicleClass,
-        'enrollment_date': Timestamp.fromDate(_enrollmentDate!),
-        'learner_license_number': _learnerLicenseController.text.trim(),
-        'learner_license_expiry': _learnerLicenseExpiry != null
-            ? Timestamp.fromDate(_learnerLicenseExpiry!)
+
+        // NEW: Driving school details
+        'driving_school_name': drivingSchoolNameController.text.trim(),
+        'driving_school_license_number': drivingSchoolLicenseController.text
+            .trim(),
+        'driving_school_address': drivingSchoolAddressController.text.trim(),
+
+        'enrollment_number': enrollmentNumberController.text.trim(),
+        'trainee_name': traineeNameController.text.trim(),
+
+        // NEW: Guardian details
+        'guardian_name': guardianNameController.text.trim(),
+        'guardian_relation': selectedGuardianRelation,
+
+        'permanent_address': permanentAddressController.text.trim(),
+        'temporary_address': temporaryAddressController.text.trim(),
+        'date_of_birth': Timestamp.fromDate(dateOfBirth!),
+
+        // NEW: Vehicle classes (list)
+        'vehicle_classes': selectedVehicleClasses,
+
+        'enrollment_date': Timestamp.fromDate(enrollmentDate!),
+
+        // NEW: Training period
+        'training_start_date': Timestamp.fromDate(trainingStartDate!),
+        'training_end_date': Timestamp.fromDate(trainingEndDate!),
+
+        'learner_license_number': learnerLicenseController.text.trim(),
+        'learner_license_expiry': learnerLicenseExpiry != null
+            ? Timestamp.fromDate(learnerLicenseExpiry!)
             : null,
-        'course_completion_date': _courseCompletionDate != null
-            ? Timestamp.fromDate(_courseCompletionDate!)
+        'course_completion_date': courseCompletionDate != null
+            ? Timestamp.fromDate(courseCompletionDate!)
             : null,
-        'test_pass_date': _testPassDate != null
-            ? Timestamp.fromDate(_testPassDate!)
+        'test_pass_date': testPassDate != null
+            ? Timestamp.fromDate(testPassDate!)
             : null,
-        'driving_license_number': _drivingLicenseController.text.trim(),
-        'driving_license_issue_date': _drivingLicenseIssueDate != null
-            ? Timestamp.fromDate(_drivingLicenseIssueDate!)
-            : null,
-        'licensing_authority': _licensingAuthorityController.text.trim(),
-        'remarks': _remarksController.text.trim(),
-        'aadhaar_number': _aadhaarNumberController.text.trim(),
-        'pan_number': _panNumberController.text.trim(),
-        'user_photo_url': imageUrls['user_photo_url'],
+
+        // NEW: Certification
+        'instructor_name': instructorNameController.text.trim(),
+        'certifying_authority': selectedCertifyingAuthority,
+
+        'remarks': remarksController.text.trim(),
+        'aadhaar_number': aadhaarNumberController.text.trim(),
+        'pan_number': panNumberController.text.trim(),
+        'photo_url': imageUrls['photo_url'],
         'aadhaar_photo_url': imageUrls['aadhaar_photo_url'],
         'pan_photo_url': imageUrls['pan_photo_url'],
         'updated_at': FieldValue.serverTimestamp(),
       };
 
-      if (_hasExistingData) {
+      if (hasExistingData) {
         // Update existing record
         final snapshot = await FirebaseFirestore.instance
             .collection('form14_enrollment')
@@ -1348,7 +1449,7 @@ class _Form14EnrollmentScreenState extends ConsumerState<Form14EnrollmentScreen>
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => isLoading = false);
       }
     }
   }

@@ -849,7 +849,8 @@ class _Form15DrivingHoursScreenState
           .collection('users')
           .doc(user.uid)
           .get();
-      final userName = userDoc.data()?['name'] ?? 'Student';
+      print('User data: ${userDoc.data()}');
+      final userName = userDoc.data()?['full_name'] ?? 'Student';
 
       // Convert Form15DrivingHours objects to Map
       final drivingHoursData = _drivingHours.map((hours) {

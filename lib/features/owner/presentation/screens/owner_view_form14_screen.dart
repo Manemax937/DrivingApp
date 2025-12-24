@@ -174,6 +174,14 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
               ],
             ),
           ),
+          // Download PDF Button
+          if (_formData != null)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
         ],
       ),
     );
@@ -188,31 +196,74 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
     }
 
     try {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Generating PDF...')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Generating PDF...'),
+            ],
+          ),
+          backgroundColor: Color(0xFFFF7043),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
 
       await PDFService.downloadForm14PDF(
-        context: context, // Add this
+        context: context,
         studentName: widget.studentName,
         formData: _formData!,
-        userPhotoUrl: _formData!['user_photo_url'],
+        userPhotoUrl: _formData!['photo_url'],
         aadhaarPhotoUrl: _formData!['aadhaar_photo_url'],
         panPhotoUrl: _formData!['pan_photo_url'],
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PDF downloaded successfully'),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('PDF downloaded successfully!'),
+              ],
+            ),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('Error: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
         );
       }
     }
@@ -229,7 +280,26 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
           _buildPhotoSection(),
           SizedBox(height: 20),
 
-          // Basic Information
+          // NEW: Driving School Details
+          _buildInfoCard(
+            'Driving School Details',
+            Icons.school,
+            [Color(0xFFFF6F00), Color(0xFFFF8F00)],
+            [
+              _buildInfoRow('School Name', _formData!['driving_school_name']),
+              _buildInfoRow(
+                'License Number',
+                _formData!['driving_school_license_number'],
+              ),
+              _buildInfoRow(
+                'School Address',
+                _formData!['driving_school_address'],
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+
+          // Basic Information (UPDATED)
           _buildInfoCard(
             'Basic Information',
             Icons.person,
@@ -240,9 +310,11 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
                 _formData!['enrollment_number'],
               ),
               _buildInfoRow('Trainee Name', _formData!['trainee_name']),
+              // NEW: Guardian details
+              _buildInfoRow('Guardian Name', _formData!['guardian_name']),
               _buildInfoRow(
-                'Son/Wife/Daughter of',
-                _formData!['relation_name'],
+                'Guardian Relation',
+                _formData!['guardian_relation'],
               ),
               _buildInfoRow(
                 'Date of Birth',
@@ -282,16 +354,29 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
           ),
           SizedBox(height: 16),
 
-          // Training Details
+          // Training Details (UPDATED)
           _buildInfoCard(
             'Training Details',
             Icons.directions_car,
             [Color(0xFF66BB6A), Color(0xFF81C784)],
             [
-              _buildInfoRow('Vehicle Class', _formData!['vehicle_class']),
+              // NEW: Vehicle Classes (list)
+              _buildVehicleClassesRow(
+                'Vehicle Classes',
+                _formData!['vehicle_classes'],
+              ),
               _buildInfoRow(
                 'Enrollment Date',
                 _formatDate(_formData!['enrollment_date']),
+              ),
+              // NEW: Training period
+              _buildInfoRow(
+                'Training Start Date',
+                _formatDate(_formData!['training_start_date']),
+              ),
+              _buildInfoRow(
+                'Training End Date',
+                _formatDate(_formData!['training_end_date']),
               ),
               _buildInfoRow(
                 'Course Completion',
@@ -319,17 +404,20 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
                 'License Expiry',
                 _formatDate(_formData!['learner_license_expiry']),
               ),
+            ],
+          ),
+          SizedBox(height: 16),
+
+          // NEW: Certification Section
+          _buildInfoCard(
+            'Certification',
+            Icons.verified,
+            [Color(0xFF26A69A), Color(0xFF4DB6AC)],
+            [
+              _buildInfoRow('Instructor Name', _formData!['instructor_name']),
               _buildInfoRow(
-                'Driving License',
-                _formData!['driving_license_number'],
-              ),
-              _buildInfoRow(
-                'License Issue Date',
-                _formatDate(_formData!['driving_license_issue_date']),
-              ),
-              _buildInfoRow(
-                'Licensing Authority',
-                _formData!['licensing_authority'],
+                'Certifying Authority',
+                _formData!['certifying_authority'],
               ),
             ],
           ),
@@ -349,8 +437,81 @@ class _OwnerViewForm14ScreenState extends State<OwnerViewForm14Screen> {
     );
   }
 
+  // NEW: Vehicle Classes Row (for list display)
+  Widget _buildVehicleClassesRow(String label, dynamic value) {
+    if (value == null) return SizedBox.shrink();
+
+    String displayValue;
+    if (value is List) {
+      displayValue = value.isEmpty ? 'N/A' : value.join(', ');
+    } else {
+      displayValue = value.toString();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: value is List
+                  ? value.map<Widget>((vehicleClass) {
+                      return Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFF7043).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Color(0xFFFF7043).withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(
+                          vehicleClass.toString(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFFF7043),
+                          ),
+                        ),
+                      );
+                    }).toList()
+                  : [
+                      Text(
+                        displayValue,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPhotoSection() {
-    final userPhoto = _formData!['user_photo_url'];
+    final userPhoto = _formData!['photo_url'];
     final aadhaarPhoto = _formData!['aadhaar_photo_url'];
     final panPhoto = _formData!['pan_photo_url'];
 
