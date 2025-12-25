@@ -19,7 +19,7 @@ abstract class FirebaseAuthDataSource {
 
   Future<void> signOut();
 
-  Future<void> changePassword(String newPassword);
+  Future<void> changePassword(String currentPassword, String newPassword);
 
   Future<void> sendPasswordResetEmail(String email);
 
@@ -382,29 +382,95 @@ class FirebaseAuthDataSourceImpl implements FirebaseAuthDataSource {
   }
 
   @override
-  Future<void> changePassword(String newPassword) async {
+  Future<void> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
     try {
       final user = _auth.currentUser;
       if (user == null) {
         throw AuthException('No user signed in');
       }
 
+      // Get user email
+      final email = user.email;
+      if (email == null) {
+        throw AuthException('User email not found');
+      }
+
+      // Get user role to check if student
+      final userDoc = await _firestore
+          .collection(FirebaseService.usersCollection)
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        throw AuthException('User data not found');
+      }
+
+      final userRole = userDoc.data()?['role'] as String?;
+
+      // STEP 1: Re-authenticate with current password (CRITICAL for security)
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: currentPassword,
+      );
+
+      try {
+        await user.reauthenticateWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'wrong-password') {
+          throw AuthException('Current password is incorrect');
+        } else if (e.code == 'invalid-credential') {
+          throw AuthException('Invalid credentials. Please try again');
+        }
+        throw AuthException('Re-authentication failed: ${e.message}');
+      }
+
+      // STEP 2: Update to new password (only after successful re-authentication)
       await user.updatePassword(newPassword);
 
-      // Update first_login flag and updated_at timestamp
+      // STEP 3: Update Firestore metadata in users collection
       await _firestore
           .collection(FirebaseService.usersCollection)
           .doc(user.uid)
           .update({
-            'first_login': false,
+            'password_updated_at': FieldValue.serverTimestamp(),
             'updated_at': FieldValue.serverTimestamp(),
           });
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        throw AuthException('Please re-login and try again');
+
+      // STEP 4: If student, also update the password in students collection
+      if (userRole == 'student') {
+        final studentQuery = await _firestore
+            .collection(FirebaseService.studentsCollection)
+            .where('user_id', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+
+        if (studentQuery.docs.isNotEmpty) {
+          await studentQuery.docs.first.reference.update({
+            'login_password': newPassword,
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+        }
       }
-      throw AuthException('Password change failed: ${e.message}');
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'weak-password':
+          throw ValidationException(
+            'New password is too weak. Use at least 6 characters',
+          );
+        case 'requires-recent-login':
+          throw AuthException(
+            'Session expired. Please log out and log in again',
+          );
+        case 'wrong-password':
+          throw AuthException('Current password is incorrect');
+        default:
+          throw AuthException('Password change failed: ${e.message}');
+      }
     } catch (e) {
+      if (e is AppException) rethrow;
       throw AuthException('Password change failed: $e');
     }
   }
@@ -412,7 +478,7 @@ class FirebaseAuthDataSourceImpl implements FirebaseAuthDataSource {
   @override
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      await _auth.sendPasswordResetEmail(email: '');
+      await _auth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case 'user-not-found':

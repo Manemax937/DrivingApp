@@ -67,7 +67,7 @@ class DrivingSchoolApp extends ConsumerWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      routerConfig: router, // ✅ NOW ROUTES EXIST
+      routerConfig: router, // ✅ NOW ROUTES EXIS
     );
   }
 }

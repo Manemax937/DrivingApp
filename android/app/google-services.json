@@ -7,12 +7,56 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:859418833036:android:d8cf17ba26e2f4c6af4ba9",
+        "android_client_info": {
+          "package_name": "com.driveSetu.driveapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "859418833036-8eq9bf7aol75o1rthvbasc37g361fc6j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDO9vEXXOHOe4F3PS9-uKq3r-w7OSFFCGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "859418833036-8eq9bf7aol75o1rthvbasc37g361fc6j.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "859418833036-qsvms9l86uq3ep4hnrfbkmk24bmc7lh2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.driveapp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:859418833036:android:36dd5703413f2c98af4ba9",
         "android_client_info": {
           "package_name": "com.example.driveapp"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "859418833036-pc4pb4c9ata576ec168d0cl3hed34gcj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.driveapp",
+            "certificate_hash": "6a08164d69e55b3fc9b498cd3ef9fba01ae5e85f"
+          }
+        },
         {
           "client_id": "859418833036-8eq9bf7aol75o1rthvbasc37g361fc6j.apps.googleusercontent.com",
           "client_type": 3

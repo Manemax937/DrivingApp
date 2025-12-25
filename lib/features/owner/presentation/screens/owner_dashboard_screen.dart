@@ -259,8 +259,35 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
     );
   }
 
+  List<Student> _filterStudents(List<Student> students) {
+    if (_selectedCourse == null && _selectedStatus == null) {
+      return students; // Show all if no filter selected
+    }
+
+    return students.where((student) {
+      // Filter by course type
+      if (_selectedCourse != null) {
+        if (student.courseType != _selectedCourse) {
+          return false;
+        }
+      }
+
+      // Filter by payment status
+      if (_selectedStatus != null) {
+        if (student.paymentStatus != _selectedStatus) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+  }
+
   Widget _buildDashboardContent(List<Student> students) {
     final schoolInfo = ref.watch(ownerSchoolProvider);
+
+    // ✅ FILTER STUDENTS HERE
+    final filteredStudents = _filterStudents(students);
 
     return FadeTransition(
       opacity: _fadeAnimation!,
@@ -344,17 +371,19 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
               ),
 
               const SizedBox(height: 8),
-              _buildStatisticsSection(students),
+              _buildStatisticsSection(
+                students,
+              ), // Use original students for stats
               _buildFilterSection(),
 
-              // Student List or Empty State
-              students.isEmpty
+              // ✅ USE FILTERED STUDENTS HERE
+              filteredStudents.isEmpty
                   ? _buildEmptyState()
                   : ListView.builder(
                       shrinkWrap: true,
                       physics: NeverScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(20),
-                      itemCount: students.length,
+                      itemCount: filteredStudents.length,
                       itemBuilder: (context, index) {
                         return TweenAnimationBuilder<double>(
                           duration: Duration(milliseconds: 300 + (index * 50)),
@@ -366,7 +395,7 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
                               child: Opacity(opacity: value, child: child),
                             );
                           },
-                          child: _buildStudentCard(students[index]),
+                          child: _buildStudentCard(filteredStudents[index]),
                         );
                       },
                     ),
@@ -839,6 +868,20 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
   }
 
   Widget _buildEmptyState() {
+    // Check if filters are active
+    final hasActiveFilter = _selectedCourse != null || _selectedStatus != null;
+
+    String message;
+    String description;
+
+    if (hasActiveFilter) {
+      message = 'No students found';
+      description = 'No students match the selected filter';
+    } else {
+      message = 'No students yet';
+      description = 'Add your first student to get started';
+    }
+
     return Center(
       child: Container(
         margin: EdgeInsets.all(32),
@@ -856,11 +899,15 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
                 color: Colors.grey[100],
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.school, size: 64, color: Colors.grey[400]),
+              child: Icon(
+                hasActiveFilter ? Icons.filter_alt_off : Icons.school,
+                size: 64,
+                color: Colors.grey[400],
+              ),
             ),
             const SizedBox(height: 20),
             Text(
-              'No students yet',
+              message,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -868,32 +915,48 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
               ),
             ),
             const SizedBox(height: 8),
-            Text('', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            Text(
+              description,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
             const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+            if (hasActiveFilter)
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _selectedCourse = null;
+                    _selectedStatus = null;
+                  });
+                },
+                icon: const Icon(Icons.clear),
+                label: const Text('Clear Filters'),
+                style: TextButton.styleFrom(foregroundColor: Color(0xFFFF7043)),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ElevatedButton.icon(
-                onPressed: () => context.push('/owner/admission'),
-                icon: const Icon(Icons.person_add),
-                label: const Text(
-                  'Add Student',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                child: ElevatedButton.icon(
+                  onPressed: () => context.push('/owner/admission'),
+                  icon: const Icon(Icons.person_add),
+                  label: const Text(
+                    'Add Student',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

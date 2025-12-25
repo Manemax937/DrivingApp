@@ -1,3 +1,5 @@
+import 'package:driveapp/features/auth/presentation/screens/change_password_screen.dart';
+import 'package:driveapp/features/owner/presentation/screens/edit_owner_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -560,44 +562,27 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen>
             Icons.edit,
             [Color(0xFF42A5F5), Color(0xFF64B5F6)],
             () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.white),
-                      SizedBox(width: 12),
-                      Text('Edit profile coming soon!'),
-                    ],
-                  ),
-                  backgroundColor: Color(0xFF42A5F5),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+              // Navigate to edit profile screen
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EditOwnerProfileScreen(),
                 ),
               );
             },
           ),
+
           SizedBox(height: 12),
           _buildActionButton(
             'Change Password',
             Icons.lock_outline,
             [Color(0xFF66BB6A), Color(0xFF81C784)],
             () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.white),
-                      SizedBox(width: 12),
-                      Text('Change password coming soon!'),
-                    ],
-                  ),
-                  backgroundColor: Color(0xFF66BB6A),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+              // Navigate to change password screen
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChangePasswordScreen(),
                 ),
               );
             },

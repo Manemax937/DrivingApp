@@ -930,34 +930,82 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         return;
       }
 
-      final storedPassword = (data['login_password'] ?? '') as String;
+      final existingUserId = (data['user_id'] ?? '').toString().trim();
 
-      if (storedPassword != password) {
-        _showSnack('Incorrect password. Contact the owner.');
-        return;
-      }
-
-      final existingUserId = (data['user_id'] ?? '').toString();
-
+      // ✅ SMART LOGIC: Check if account already exists
       if (existingUserId.isNotEmpty) {
+        // Account already created - use Firebase Auth directly
+        print('🔵 Existing user detected, using Firebase Auth');
         await ref.read(authProvider.notifier).login(email, password);
         return;
       }
+
+      // ❌ No account yet - this is first-time login
+      print('🟢 New user detected, checking Firestore credentials');
+
+      // Try multiple possible password field names
+      String? storedPassword;
+
+      if (data.containsKey('login_password')) {
+        storedPassword = (data['login_password'] ?? '').toString().trim();
+        print(
+          '📝 Found login_password field: ${storedPassword.isNotEmpty ? "[SET]" : "[EMPTY]"}',
+        );
+      } else if (data.containsKey('password')) {
+        storedPassword = (data['password'] ?? '').toString().trim();
+        print(
+          '📝 Found password field: ${storedPassword.isNotEmpty ? "[SET]" : "[EMPTY]"}',
+        );
+      } else if (data.containsKey('initial_password')) {
+        storedPassword = (data['initial_password'] ?? '').toString().trim();
+        print(
+          '📝 Found initial_password field: ${storedPassword.isNotEmpty ? "[SET]" : "[EMPTY]"}',
+        );
+      } else {
+        // Debug: Print all available fields
+        print('⚠️ Available fields in document: ${data.keys.toList()}');
+        _showSnack('Password field not found in admission. Contact the owner.');
+        return;
+      }
+
+      if (storedPassword == null || storedPassword.isEmpty) {
+        _showSnack('No password set for this admission. Contact the owner.');
+        return;
+      }
+
+      // Trim entered password as well
+      final enteredPassword = password.trim();
+
+      print('🔐 Comparing passwords...');
+      print('   Stored length: ${storedPassword.length}');
+      print('   Entered length: ${enteredPassword.length}');
+
+      if (storedPassword != enteredPassword) {
+        _showSnack('Incorrect password. Please check and try again.');
+        return;
+      }
+
+      print('✅ Password match! Creating Firebase Auth account...');
 
       final admissionSchoolId =
           schoolId ?? (data['school_id'] ?? '') as String? ?? '';
 
       UserCredential cred;
       try {
+        // Create Firebase Auth account with owner's password
         cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
-          password: password,
+          password: enteredPassword,
         );
+        print('✅ Firebase Auth account created');
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          await ref.read(authProvider.notifier).login(email, password);
+          print('⚠️ Email already in use, trying to login...');
+          // Edge case: Account exists but not linked
+          await ref.read(authProvider.notifier).login(email, enteredPassword);
           return;
         }
+        print('❌ Firebase Auth error: ${e.code} - ${e.message}');
         rethrow;
       }
 
@@ -967,6 +1015,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
       final phone = (data['phone'] ?? '') as String? ?? '';
 
+      // Create user document
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'email': email,
         'full_name': fullName,
@@ -979,18 +1028,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         'updated_at': FieldValue.serverTimestamp(),
       });
 
+      print('✅ User document created');
+
+      // Link user_id to admission record
       await admissionDoc.reference.update({
         'user_id': uid,
         'email': email,
         'login_email': email,
-        'login_password': password,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      await ref.read(authProvider.notifier).login(email, password);
+      print('✅ Admission linked to user');
+
+      // Auto-login after account creation
+      await ref.read(authProvider.notifier).login(email, enteredPassword);
+
+      print('✅ Login successful!');
     } on FirebaseAuthException catch (e) {
+      print('❌ FirebaseAuthException: ${e.code} - ${e.message}');
       _showSnack(e.message ?? 'Authentication failed');
     } catch (e) {
+      print('❌ Error: $e');
       _showSnack('Login failed: $e');
     } finally {
       if (mounted) setState(() => _localLoading = false);

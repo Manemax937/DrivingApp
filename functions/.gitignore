@@ -1,2 +1,6 @@
 node_modules/
 *.local
+**/android/key.properties
+*.jks
+*.keystore
+upload-keystore.jks

@@ -65,10 +65,11 @@ class FirebaseAuthRepositoryImpl implements AuthRepository {
     required String newPassword,
   }) async {
     try {
-      // Note: Firebase doesn't verify old password directly
-      // User needs to re-authenticate if needed
-      await dataSource.changePassword(newPassword);
+      // FIXED: Pass both current and new password to datasource
+      await dataSource.changePassword(oldPassword, newPassword);
       return const Right(null);
+    } on ValidationException catch (e) {
+      return Left(ValidationFailure(e.message));
     } on AuthException catch (e) {
       return Left(AuthFailure(e.message));
     } catch (e) {
