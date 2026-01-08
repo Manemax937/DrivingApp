@@ -33,7 +33,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
   @override
   void initState() {
     super.initState();
-
+    _checkAndShowPasswordChangeDialog();
     // Initialize animations
     _animationController = AnimationController(
       vsync: this,
@@ -81,6 +81,517 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
+  }
+
+  Future<void> _checkAndShowPasswordChangeDialog() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final mustChangePassword =
+          userDoc.data()?['must_change_password'] ?? false;
+
+      if (mustChangePassword && mounted) {
+        // Show popup after a short delay for better UX
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (mounted) {
+            _showPasswordChangeDialog();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking password status: $e');
+    }
+  }
+
+  void _showPasswordChangeDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must take action
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false, // Prevent back button
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFF7043), Color(0xFFEC407A)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.lock_reset, color: Colors.white, size: 24),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Change Password', style: TextStyle(fontSize: 18)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200, width: 2),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.orange.shade700,
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'You are using a temporary password!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.orange.shade900,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'For your account security, please change your password as soon as possible.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              ),
+              SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green,
+                    size: 18,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Use a strong, unique password',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green,
+                    size: 18,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'At least 6 characters long',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Later', style: TextStyle(color: Colors.grey[600])),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFF7043), Color(0xFFEC407A)],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _showChangePasswordBottomSheet();
+                },
+                icon: Icon(Icons.lock, size: 18),
+                label: Text(
+                  'Change Now',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  elevation: 0,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showChangePasswordBottomSheet() {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isLoading = false;
+    bool obscureCurrent = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFFF7043), Color(0xFFEC407A)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.lock_reset, color: Colors.white),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Change Your Password',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 20),
+
+                    // Current Password
+                    TextFormField(
+                      controller: currentPasswordController,
+                      obscureText: obscureCurrent,
+                      decoration: InputDecoration(
+                        labelText: 'Current Password',
+                        hintText: 'Student@123',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureCurrent
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setModalState(
+                              () => obscureCurrent = !obscureCurrent,
+                            );
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Color(0xFFFF7043),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter current password';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // New Password
+                    TextFormField(
+                      controller: newPasswordController,
+                      obscureText: obscureNew,
+                      decoration: InputDecoration(
+                        labelText: 'New Password',
+                        hintText: 'At least 6 characters',
+                        prefixIcon: Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNew
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setModalState(() => obscureNew = !obscureNew);
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Color(0xFFFF7043),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter new password';
+                        }
+                        if (value.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        if (value == 'Student@123') {
+                          return 'Cannot use the temporary password';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // Confirm Password
+                    TextFormField(
+                      controller: confirmPasswordController,
+                      obscureText: obscureConfirm,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm New Password',
+                        prefixIcon: Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirm
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setModalState(
+                              () => obscureConfirm = !obscureConfirm,
+                            );
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Color(0xFFFF7043),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please confirm password';
+                        }
+                        if (value != newPasswordController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 24),
+
+                    // Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () => Navigator.pop(context),
+                            child: Text('Cancel'),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFFF7043), Color(0xFFEC407A)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ElevatedButton(
+                              onPressed: isLoading
+                                  ? null
+                                  : () async {
+                                      if (!formKey.currentState!.validate())
+                                        return;
+
+                                      setModalState(() => isLoading = true);
+
+                                      try {
+                                        final user =
+                                            FirebaseAuth.instance.currentUser!;
+                                        final credential =
+                                            EmailAuthProvider.credential(
+                                              email: user.email!,
+                                              password:
+                                                  currentPasswordController.text
+                                                      .trim(),
+                                            );
+
+                                        await user.reauthenticateWithCredential(
+                                          credential,
+                                        );
+                                        await user.updatePassword(
+                                          newPasswordController.text.trim(),
+                                        );
+
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(user.uid)
+                                            .update({
+                                              'first_login': false,
+                                              'must_change_password': false,
+                                              'updated_at':
+                                                  FieldValue.serverTimestamp(),
+                                            });
+
+                                        Navigator.pop(context);
+
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.check_circle,
+                                                  color: Colors.white,
+                                                ),
+                                                SizedBox(width: 12),
+                                                Text(
+                                                  'Password changed successfully!',
+                                                ),
+                                              ],
+                                            ),
+                                            backgroundColor: Colors.green,
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        );
+                                      } on FirebaseAuthException catch (e) {
+                                        String message =
+                                            'Failed to change password';
+                                        if (e.code == 'wrong-password') {
+                                          message =
+                                              'Current password is incorrect';
+                                        } else if (e.code == 'weak-password') {
+                                          message = 'Password is too weak';
+                                        }
+
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(message),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error: $e'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      } finally {
+                                        setModalState(() => isLoading = false);
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: isLoading
+                                  ? SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Text(
+                                      'Change Password',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override

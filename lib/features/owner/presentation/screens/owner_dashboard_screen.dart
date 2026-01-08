@@ -3,6 +3,7 @@ import 'package:driveapp/features/owner/presentation/screens/owner_view_attendan
 import 'package:driveapp/features/owner/presentation/screens/owner_view_form14_screen.dart';
 import 'package:driveapp/features/owner/presentation/screens/owner_view_form15_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -189,73 +190,171 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen>
   Widget _buildCustomAppBar() {
     final user = FirebaseAuth.instance.currentUser;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Dashboard',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                Shadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-          ),
-          Row(
+    return Column(
+      children: [
+        // Main AppBar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Profile Button
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+              Text(
+                'Dashboard',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: IconButton(
-                  icon: const Icon(Icons.person, color: Colors.white),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const OwnerProfileScreen(),
+              ),
+              Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.person, color: Colors.white),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const OwnerProfileScreen(),
+                        ),
+                      ),
+                      tooltip: 'Profile',
                     ),
                   ),
-                  tooltip: 'Profile',
-                ),
-              ),
-              SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.qr_code, color: Colors.white),
-                  onPressed: () => context.push('/owner/qr-code'),
-                  tooltip: 'QR Code',
-                ),
-              ),
-              SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                  onPressed: () => _handleLogout(context),
-                  tooltip: 'Logout',
-                ),
+                  SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.qr_code, color: Colors.white),
+                      onPressed: () => context.push('/owner/qr-code'),
+                      tooltip: 'QR Code',
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.logout, color: Colors.white),
+                      onPressed: () => _handleLogout(context),
+                      tooltip: 'Logout',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        ),
+
+        // 🔥 PASSWORD INFO BANNER
+        Container(
+          margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFF7043), Color(0xFFEC407A)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.key, color: Colors.white, size: 20),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Default Student Password',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Student@123',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF7043),
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '(must change on first login)',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[500],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.copy, color: Color(0xFFFF7043), size: 20),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: 'Student@123'));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text('Password copied!'),
+                        ],
+                      ),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+                },
+                tooltip: 'Copy Password',
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1254,18 +1353,24 @@ class SchoolInfo {
 final studentsStreamProvider = StreamProvider.autoDispose<List<Student>>((
   ref,
 ) async* {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
+  // Wait for Firebase Auth to be ready
+  final user = await FirebaseAuth.instance.authStateChanges().firstWhere(
+    (user) => user != null,
+  );
+
+  // Fetch user document
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(user?.uid)
+      .get();
+
+  final schoolId = userDoc.data()?['school_id'] as String?;
+  if (schoolId == null) {
     yield [];
     return;
   }
 
-  final userDoc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(user.uid)
-      .get();
-  final schoolId = userDoc.data()?['school_id'] as String? ?? user.uid;
-
+  // 🔥 Start Firestore stream AFTER auth is ready
   yield* FirebaseFirestore.instance
       .collection('students')
       .where('school_id', isEqualTo: schoolId)

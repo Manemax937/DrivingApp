@@ -1,4 +1,5 @@
 import 'package:driveapp/core/routes/app_router.dart';
+import 'package:driveapp/features/auth/presentation/screens/force_change_password_screen.dart';
 import 'package:driveapp/features/owner/presentation/screens/owner_dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -888,6 +889,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Future<void> _loginStudentWithAdmission(String email, String password) async {
     setState(() => _localLoading = true);
     try {
+      // Step 1: Validate school name if provided
       final schoolName = _schoolNameController.text.trim();
 
       String? schoolId;
@@ -906,150 +908,110 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         schoolId = schoolQuery.docs.first.id;
       }
 
-      Query query = FirebaseFirestore.instance
-          .collection('students')
-          .where('login_email', isEqualTo: email);
+      // Step 2: Try to login with Firebase Auth directly
+      print('🔍 Attempting Firebase Auth login for: $email');
 
-      if (schoolId != null) {
-        query = query.where('school_id', isEqualTo: schoolId);
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Login failed');
       }
 
-      final admissionSnap = await query.limit(1).get();
+      print('✅ Firebase Auth successful: ${user.uid}');
 
-      if (admissionSnap.docs.isEmpty) {
-        _showSnack(
-          'No admission found for this email and school. Contact the owner.',
+      // Step 3: Verify user document exists
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        await FirebaseAuth.instance.signOut();
+        throw Exception(
+          'User profile not found. Contact your school administrator.',
         );
-        return;
       }
 
-      final admissionDoc = admissionSnap.docs.first;
-      final data = admissionDoc.data() as Map<String, dynamic>?;
-      if (data == null) {
-        _showSnack('Invalid admission data. Contact the owner.');
-        return;
+      final userData = userDoc.data()!;
+
+      // Step 4: Verify school_id matches (if school name was provided)
+      if (schoolId != null && userData['school_id'] != schoolId) {
+        await FirebaseAuth.instance.signOut();
+        throw Exception('This account does not belong to the selected school.');
       }
 
-      final existingUserId = (data['user_id'] ?? '').toString().trim();
-
-      // ✅ SMART LOGIC: Check if account already exists
-      if (existingUserId.isNotEmpty) {
-        // Account already created - use Firebase Auth directly
-        print('🔵 Existing user detected, using Firebase Auth');
-        await ref.read(authProvider.notifier).login(email, password);
-        return;
-      }
-
-      // ❌ No account yet - this is first-time login
-      print('🟢 New user detected, checking Firestore credentials');
-
-      // Try multiple possible password field names
-      String? storedPassword;
-
-      if (data.containsKey('login_password')) {
-        storedPassword = (data['login_password'] ?? '').toString().trim();
-        print(
-          '📝 Found login_password field: ${storedPassword.isNotEmpty ? "[SET]" : "[EMPTY]"}',
+      // Step 5: Check if account is active
+      if (userData['active'] == false) {
+        await FirebaseAuth.instance.signOut();
+        throw Exception(
+          'Your account has been deactivated. Contact your school.',
         );
-      } else if (data.containsKey('password')) {
-        storedPassword = (data['password'] ?? '').toString().trim();
-        print(
-          '📝 Found password field: ${storedPassword.isNotEmpty ? "[SET]" : "[EMPTY]"}',
-        );
-      } else if (data.containsKey('initial_password')) {
-        storedPassword = (data['initial_password'] ?? '').toString().trim();
-        print(
-          '📝 Found initial_password field: ${storedPassword.isNotEmpty ? "[SET]" : "[EMPTY]"}',
-        );
-      } else {
-        // Debug: Print all available fields
-        print('⚠️ Available fields in document: ${data.keys.toList()}');
-        _showSnack('Password field not found in admission. Contact the owner.');
-        return;
       }
 
-      if (storedPassword == null || storedPassword.isEmpty) {
-        _showSnack('No password set for this admission. Contact the owner.');
-        return;
-      }
+      // Step 6: Check if must change password (first-time login)
+      if (userData['must_change_password'] == true) {
+        print('🔒 First-time login detected - must change password');
 
-      // Trim entered password as well
-      final enteredPassword = password.trim();
-
-      print('🔐 Comparing passwords...');
-      print('   Stored length: ${storedPassword.length}');
-      print('   Entered length: ${enteredPassword.length}');
-
-      if (storedPassword != enteredPassword) {
-        _showSnack('Incorrect password. Please check and try again.');
-        return;
-      }
-
-      print('✅ Password match! Creating Firebase Auth account...');
-
-      final admissionSchoolId =
-          schoolId ?? (data['school_id'] ?? '') as String? ?? '';
-
-      UserCredential cred;
-      try {
-        // Create Firebase Auth account with owner's password
-        cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email,
-          password: enteredPassword,
-        );
-        print('✅ Firebase Auth account created');
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'email-already-in-use') {
-          print('⚠️ Email already in use, trying to login...');
-          // Edge case: Account exists but not linked
-          await ref.read(authProvider.notifier).login(email, enteredPassword);
-          return;
+        if (mounted) {
+          // Navigate to force change password screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ForceChangePasswordScreen(
+                currentPassword: password,
+                onPasswordChanged: () {
+                  // After password change, complete login
+                  if (mounted) {
+                    ref.read(authProvider.notifier).login(email, password);
+                  }
+                },
+              ),
+            ),
+          );
         }
-        print('❌ Firebase Auth error: ${e.code} - ${e.message}');
-        rethrow;
+        return;
       }
 
-      final uid = cred.user!.uid;
-      final fullName = (data['full_name'] ?? '') as String;
-      await cred.user?.updateDisplayName(fullName);
+      // Step 7: Normal login - proceed to dashboard
+      await ref.read(authProvider.notifier).login(email, password);
 
-      final phone = (data['phone'] ?? '') as String? ?? '';
-
-      // Create user document
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'email': email,
-        'full_name': fullName,
-        'phone': phone,
-        'role': 'student',
-        'school_id': admissionSchoolId,
-        'first_login': true,
-        'active': true,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-
-      print('✅ User document created');
-
-      // Link user_id to admission record
-      await admissionDoc.reference.update({
-        'user_id': uid,
-        'email': email,
-        'login_email': email,
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-
-      print('✅ Admission linked to user');
-
-      // Auto-login after account creation
-      await ref.read(authProvider.notifier).login(email, enteredPassword);
-
-      print('✅ Login successful!');
+      print('✅ Login complete - redirecting to dashboard');
     } on FirebaseAuthException catch (e) {
       print('❌ FirebaseAuthException: ${e.code} - ${e.message}');
-      _showSnack(e.message ?? 'Authentication failed');
+
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage =
+              'No account found with this email. Contact your school administrator.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Incorrect password. Please try again.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Invalid email format.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later.';
+          break;
+        case 'network-request-failed':
+          errorMessage = 'Network error. Check your internet connection.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Login failed. Please try again.';
+      }
+
+      _showSnack(errorMessage);
     } catch (e) {
       print('❌ Error: $e');
-      _showSnack('Login failed: $e');
+      _showSnack(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _localLoading = false);
     }

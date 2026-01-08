@@ -1,4 +1,10 @@
+import 'dart:math';
+
+import 'package:driveapp/features/owner/presentation/screens/student_created_success_screen.dart';
+
+import 'package:driveapp/main.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,8 +25,7 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _studentPasswordController = TextEditingController();
-  final _confirmStudentPasswordController = TextEditingController();
+
   final _fatherNameController = TextEditingController();
   final _addressController = TextEditingController();
   final _feesAmountController = TextEditingController();
@@ -69,8 +74,7 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
     _fullNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _studentPasswordController.dispose();
-    _confirmStudentPasswordController.dispose();
+
     _fatherNameController.dispose();
     _addressController.dispose();
     _feesAmountController.dispose();
@@ -161,35 +165,7 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
                                   return Validators.validateEmail(value);
                                 },
                               ),
-                              const SizedBox(height: 16),
-                              _buildTextField(
-                                controller: _studentPasswordController,
-                                label: 'Student Password',
-                                icon: Icons.lock,
-                                obscureText: true,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Password is required';
-                                  }
-                                  if (value.length < 6)
-                                    return 'Min 6 characters';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              _buildTextField(
-                                controller: _confirmStudentPasswordController,
-                                label: 'Confirm Password',
-                                icon: Icons.lock_outline,
-                                obscureText: true,
-                                validator: (value) {
-                                  if (value !=
-                                      _studentPasswordController.text) {
-                                    return 'Passwords do not match';
-                                  }
-                                  return null;
-                                },
-                              ),
+
                               const SizedBox(height: 16),
                               _buildTextField(
                                 controller: _fatherNameController,
@@ -678,24 +654,34 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
       _isLoading = true;
     });
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('Not authenticated');
-      }
+    final email = _emailController.text.trim();
+    final fullName = _fullNameController.text.trim();
+    final phone = _phoneController.text.trim();
+    const tempPassword = 'Student@123';
 
-      final studentDoc = FirebaseFirestore.instance
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) throw Exception('Not authenticated');
+
+      final ownerDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (!ownerDoc.exists) throw Exception('Owner profile not found');
+
+      final schoolId = ownerDoc.data()!['school_id'] as String;
+      final studentDocRef = FirebaseFirestore.instance
           .collection('students')
           .doc();
 
-      await studentDoc.set({
+      await studentDocRef.set({
         'user_id': '',
-        'school_id': user.uid,
-        'full_name': _fullNameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'email': _emailController.text.trim(),
-        'login_email': _emailController.text.trim(),
-        'login_password': _studentPasswordController.text,
+        'school_id': schoolId,
+        'full_name': fullName,
+        'phone': phone,
+        'email': email,
+        'login_email': email,
         'father_name': _fatherNameController.text.trim().isEmpty
             ? null
             : _fatherNameController.text.trim(),
@@ -713,54 +699,325 @@ class _AdmissionFormScreenState extends ConsumerState<AdmissionFormScreen>
         'training_end_date': _trainingEndDate != null
             ? Timestamp.fromDate(_trainingEndDate!)
             : null,
+        'status': 'active',
         'created_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Text('Student admission created successfully!'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(child: Text('Error: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
-    } finally {
+      final userCred = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: tempPassword);
+
+      final uid = userCred.user!.uid;
+      await userCred.user!.updateDisplayName(fullName);
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'username': email.split('@')[0],
+        'email': email,
+        'phone': phone,
+        'full_name': fullName,
+        'role': 'student',
+        'school_id': schoolId,
+        'first_login': true,
+        'must_change_password': true,
+        'active': true,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      await studentDocRef.update({
+        'user_id': uid,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      // Clear form
+      _emailController.clear();
+      _fullNameController.clear();
+      _phoneController.clear();
+      _fatherNameController.clear();
+      _addressController.clear();
+      _feesAmountController.clear();
+
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _selectedCourseType = '2-Wheeler';
+          _selectedLicenseType = null;
+          _selectedBatchTiming = null;
+          _selectedPaymentStatus = 'Pending';
+          _trainingStartDate = null;
+          _trainingEndDate = null;
         });
       }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
+  }
+
+  // Helper widget for credential rows
+  Widget _buildCredRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 60,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+              fontSize: 14,
+            ),
+          ),
+        ),
+        Expanded(
+          child: SelectableText(
+            value,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Add these helper methods at the bottom of the class (before the closing brace)
+
+  // Generate secure 8-character temporary password
+  String _generateTempPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#';
+    final random = Random.secure();
+    return List.generate(
+      8,
+      (index) => chars[random.nextInt(chars.length)],
+    ).join();
+  }
+
+  // Show dialog with temp password
+  Future<void> _showTempPasswordDialog(
+    String email,
+    String name,
+    String tempPassword,
+  ) async {
+    print('📱 Building dialog for $name');
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF66BB6A), Color(0xFF81C784)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.check, color: Colors.white, size: 24),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text('Student Created', style: TextStyle(fontSize: 20)),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Student account created successfully!',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 20),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200, width: 2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.share,
+                          color: Colors.orange.shade700,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Share these credentials:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.orange.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Divider(height: 24, color: Colors.orange.shade200),
+                    _buildCredentialRow('Name:', name),
+                    _buildCredentialRow('Email:', email),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Temporary Password:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          SelectableText(
+                            tempPassword,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                              color: Color(0xFFFF7043),
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Student must change password on first login',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red.shade900,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Clipboard.setData(
+                ClipboardData(
+                  text:
+                      'Login Credentials for $name\n\n'
+                      'Email: $email\n'
+                      'Temporary Password: $tempPassword\n\n'
+                      'Important: Please change your password on first login.',
+                ),
+              );
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                SnackBar(
+                  content: Text('Copied to clipboard!'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: Icon(Icons.copy, size: 18),
+            label: Text('Copy'),
+            style: TextButton.styleFrom(foregroundColor: Color(0xFFFF7043)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await FirebaseAuth.instance.signOut();
+
+              _emailController.clear();
+              _fullNameController.clear();
+              _phoneController.clear();
+              _fatherNameController.clear();
+              _addressController.clear();
+              _feesAmountController.clear();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFFF7043),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(
+              'Done',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCredentialRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

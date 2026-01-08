@@ -11,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import 'firebase_options.dart';
 import 'shared/providers/storage_provider.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 /// ✅ GO ROUTER (MUST BE GLOBAL)
 final GoRouter router = GoRouter(
   initialLocation: '/',
@@ -22,6 +24,12 @@ final GoRouter router = GoRouter(
     // other routes later
   ],
 );
+
+void debugFirebaseProject() {
+  final app = Firebase.app();
+  print('🔥 Firebase Project ID: ${app.options.projectId}');
+  print('🔥 Firebase App Name: ${app.name}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +49,8 @@ void main() async {
   );
 
   final sharedPreferences = await SharedPreferences.getInstance();
+
+  debugFirebaseProject();
 
   runApp(
     ProviderScope(
