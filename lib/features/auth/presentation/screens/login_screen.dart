@@ -952,31 +952,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         );
       }
 
-      // Step 6: Check if must change password (first-time login)
-      if (userData['must_change_password'] == true) {
-        print('🔒 First-time login detected - must change password');
+      // ❌ REMOVE STEP 6 ENTIRELY - DON'T CHECK must_change_password HERE
+      // The dashboard will handle showing the dialog
 
-        if (mounted) {
-          // Navigate to force change password screen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ForceChangePasswordScreen(
-                currentPassword: password,
-                onPasswordChanged: () {
-                  // After password change, complete login
-                  if (mounted) {
-                    ref.read(authProvider.notifier).login(email, password);
-                  }
-                },
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Step 7: Normal login - proceed to dashboard
+      // Step 6: Normal login - proceed to dashboard
       await ref.read(authProvider.notifier).login(email, password);
 
       print('✅ Login complete - redirecting to dashboard');
