@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+*.hprof
+android/java_pid*.hprof
+build/
+.gradle/
+.dart_tool/
