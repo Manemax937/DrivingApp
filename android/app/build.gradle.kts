@@ -46,7 +46,7 @@ android {
         applicationId = "com.driveSetu.driveapp"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 6
+        versionCode = 8
         versionName = flutter.versionName
     }
 
